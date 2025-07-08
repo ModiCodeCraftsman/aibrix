@@ -23,13 +23,12 @@ import (
 	"github.com/vllm-project/aibrix/pkg/cache"
 	"github.com/vllm-project/aibrix/pkg/metrics"
 	"github.com/vllm-project/aibrix/pkg/types"
+	"github.com/vllm-project/aibrix/pkg/utils"
 	v1 "k8s.io/api/core/v1"
 	klog "k8s.io/klog/v2"
 )
 
-var (
-	RouterLeastLatency types.RoutingAlgorithm = "least-latency"
-)
+var RouterLeastLatency types.RoutingAlgorithm = "least-latency"
 
 func init() {
 	Register(RouterLeastLatency, NewLeastExpectedLatencyRouter)
@@ -59,12 +58,18 @@ func (r leastExpectedLatencyRouter) Route(ctx *types.RoutingContext, readyPodLis
 	cntPromt := 0
 	cntGeneration := 0
 	for _, pod := range readyPodList.All() {
-		avgPromptTokens, err := r.cache.GetMetricValueByPodModel(pod.Name, pod.Namespace, ctx.Model, metrics.AvgPromptToksPerReq)
+		avgPromptTokens, err := r.cache.GetMetricValueByPodModelKey(
+			utils.NewPodKey(pod.Namespace, pod.Name, ctx.TenantID),
+			utils.NewModelKey(ctx.Model, ctx.TenantID),
+			metrics.AvgPromptToksPerReq)
 		if err != nil {
 			klog.Error(err)
 			continue
 		}
-		avgGenerationTokens, err := r.cache.GetMetricValueByPodModel(pod.Name, pod.Namespace, ctx.Model, metrics.AvgGenerationToksPerReq)
+		avgGenerationTokens, err := r.cache.GetMetricValueByPodModelKey(
+			utils.NewPodKey(pod.Namespace, pod.Name, ctx.TenantID),
+			utils.NewModelKey(ctx.Model, ctx.TenantID),
+			metrics.AvgGenerationToksPerReq)
 		if err != nil {
 			klog.Error(err)
 			continue
@@ -89,19 +94,28 @@ func (r leastExpectedLatencyRouter) Route(ctx *types.RoutingContext, readyPodLis
 
 	for _, pod := range readyPodList.All() {
 		// expected queuing latency
-		queuingLatency, err := r.cache.GetMetricValueByPodModel(pod.Name, pod.Namespace, ctx.Model, metrics.RequestQueueTimeSeconds)
+		queuingLatency, err := r.cache.GetMetricValueByPodModelKey(
+			utils.NewPodKey(pod.Namespace, pod.Name, ctx.TenantID),
+			utils.NewModelKey(ctx.Model, ctx.TenantID),
+			metrics.RequestQueueTimeSeconds)
 		if err != nil {
 			klog.Error(err)
 			continue
 		}
 
 		// expected prefill latency
-		avgPromptTokens, err := r.cache.GetMetricValueByPodModel(pod.Name, pod.Namespace, ctx.Model, metrics.AvgPromptToksPerReq)
+		avgPromptTokens, err := r.cache.GetMetricValueByPodModelKey(
+			utils.NewPodKey(pod.Namespace, pod.Name, ctx.TenantID),
+			utils.NewModelKey(ctx.Model, ctx.TenantID),
+			metrics.AvgPromptToksPerReq)
 		if err != nil {
 			klog.Error(err)
 			continue
 		}
-		PrefillTime, err := r.cache.GetMetricValueByPodModel(pod.Name, pod.Namespace, ctx.Model, metrics.RequestPrefillTimeSeconds)
+		PrefillTime, err := r.cache.GetMetricValueByPodModelKey(
+			utils.NewPodKey(pod.Namespace, pod.Name, ctx.TenantID),
+			utils.NewModelKey(ctx.Model, ctx.TenantID),
+			metrics.RequestPrefillTimeSeconds)
 		if err != nil {
 			klog.Error(err)
 			continue
@@ -109,12 +123,18 @@ func (r leastExpectedLatencyRouter) Route(ctx *types.RoutingContext, readyPodLis
 		prefillLatency := PrefillTime.GetHistogramValue().GetMean() / avgPromptTokens.GetSimpleValue() * guessPromptTokens
 
 		// expected decode latency
-		avgGenerationTokens, err := r.cache.GetMetricValueByPodModel(pod.Name, pod.Namespace, ctx.Model, metrics.AvgGenerationToksPerReq)
+		avgGenerationTokens, err := r.cache.GetMetricValueByPodModelKey(
+			utils.NewPodKey(pod.Namespace, pod.Name, ctx.TenantID),
+			utils.NewModelKey(ctx.Model, ctx.TenantID),
+			metrics.AvgGenerationToksPerReq)
 		if err != nil {
 			klog.Error(err)
 			continue
 		}
-		DecodeTime, err := r.cache.GetMetricValueByPodModel(pod.Name, pod.Namespace, ctx.Model, metrics.RequestDecodeTimeSeconds)
+		DecodeTime, err := r.cache.GetMetricValueByPodModelKey(
+			utils.NewPodKey(pod.Namespace, pod.Name, ctx.TenantID),
+			utils.NewModelKey(ctx.Model, ctx.TenantID),
+			metrics.RequestDecodeTimeSeconds)
 		if err != nil {
 			klog.Error(err)
 			continue

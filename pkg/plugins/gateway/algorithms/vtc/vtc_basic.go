@@ -160,7 +160,9 @@ func (r *BasicVTCRouter) Route(ctx *types.RoutingContext, readyPodList types.Pod
 		// 2. Get pod load for utilization score
 		var podLoad float64
 		if r.cache != nil {
-			reqCount, err := r.cache.GetMetricValueByPodModel(pod.Name, pod.Namespace, ctx.Model, metrics.NumRequestsRunning)
+			podKey := utils.NewPodKey(pod.Namespace, pod.Name, ctx.TenantID)
+			modelKey := utils.NewModelKey(ctx.Model, ctx.TenantID)
+			reqCount, err := r.cache.GetMetricValueByPodModelKey(podKey, modelKey, metrics.NumRequestsRunning)
 			if err != nil {
 				klog.ErrorS(err, "failed to get pod metrics, using default value", "pod", pod.Name)
 				podLoad = 0

@@ -28,6 +28,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
@@ -146,7 +147,12 @@ func (s *Server) Process(srv extProcPb.ExternalProcessor_ProcessServer) error {
 
 		if err := srv.Send(resp); err != nil && len(model) > 0 {
 			klog.ErrorS(nil, err.Error(), "requestID", requestID)
-			s.cache.DoneRequestCount(routerCtx, requestID, model, traceTerm)
+			tenantID := "default"
+			if routerCtx != nil && routerCtx.TenantID != "" {
+				tenantID = routerCtx.TenantID
+			}
+			modelKey := utils.NewModelKey(model, tenantID)
+			s.cache.DoneRequestCountByModelKey(routerCtx, requestID, modelKey, traceTerm)
 			if routerCtx != nil {
 				routerCtx.Delete()
 			}

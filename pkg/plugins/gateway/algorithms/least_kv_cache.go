@@ -24,6 +24,7 @@ import (
 	"github.com/vllm-project/aibrix/pkg/cache"
 	metrics "github.com/vllm-project/aibrix/pkg/metrics"
 	"github.com/vllm-project/aibrix/pkg/types"
+	"github.com/vllm-project/aibrix/pkg/utils"
 	v1 "k8s.io/api/core/v1"
 	klog "k8s.io/klog/v2"
 )
@@ -59,12 +60,14 @@ func (r leastKvCacheRouter) Route(ctx *types.RoutingContext, readyPodList types.
 		// Due to metric refactor (pull/543) to better support lora and multi models,
 		// we change to use PodModelMetrics instead of PodMetrics in some scenarios.
 		// This works but doesn't look very promising, we can revisit this part later.
-		gpuCache, err := r.cache.GetMetricValueByPodModel(pod.Name, pod.Namespace, ctx.Model, metrics.GPUCacheUsagePerc)
+		podKey := utils.NewPodKey(pod.Namespace, pod.Name, ctx.TenantID)
+		modelKey := utils.NewModelKey(ctx.Model, ctx.TenantID)
+		gpuCache, err := r.cache.GetMetricValueByPodModelKey(podKey, modelKey, metrics.GPUCacheUsagePerc)
 		if err != nil {
 			klog.Error(err)
 			continue
 		}
-		cpuCache, err := r.cache.GetMetricValueByPodModel(pod.Name, pod.Namespace, ctx.Model, metrics.CPUCacheUsagePerc)
+		cpuCache, err := r.cache.GetMetricValueByPodModelKey(podKey, modelKey, metrics.CPUCacheUsagePerc)
 		if err != nil {
 			klog.Error(err)
 			continue

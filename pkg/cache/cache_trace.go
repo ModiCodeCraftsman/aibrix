@@ -34,6 +34,9 @@ const (
 
 func (c *Store) getRequestTrace(modelName string) *RequestTrace {
 	trace := NewRequestTrace(time.Now().UnixNano())
+	// For tracing, we're keeping model-based keys without tenant for now
+	// This is because the request trace is not used for routing decisions
+	// TODO: Consider making request trace tenant-aware in the future
 	newer, loaded := c.requestTrace.LoadOrStore(modelName, trace)
 	if loaded {
 		trace.Recycle()
@@ -48,7 +51,14 @@ func (c *Store) addPodStats(ctx *types.RoutingContext, requestID string) {
 		return
 	}
 	pod := ctx.TargetPod()
-	key := fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
+
+	// Use tenant-aware pod key
+	tenantID := ctx.TenantID
+	if tenantID == "" {
+		tenantID = "default"
+	}
+
+	key := utils.GeneratePodKey(pod.Namespace, pod.Name, tenantID)
 	metaPod, ok := c.metaPods.Load(key)
 	if !ok {
 		klog.Warningf("can't find routing pod: %s, requestID: %s", pod.Name, requestID)
@@ -66,8 +76,13 @@ func (c *Store) donePodStats(ctx *types.RoutingContext, requestID string) {
 	}
 	pod := ctx.TargetPod()
 
-	// Now that pendingLoadProvider must be set.
-	key := fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
+	// Use tenant-aware pod key
+	tenantID := ctx.TenantID
+	if tenantID == "" {
+		tenantID = "default"
+	}
+
+	key := utils.GeneratePodKey(pod.Namespace, pod.Name, tenantID)
 	metaPod, ok := c.metaPods.Load(key)
 	if !ok {
 		klog.Warningf("can't find routing pod: %s, requestID: %s", pod.Name, requestID)

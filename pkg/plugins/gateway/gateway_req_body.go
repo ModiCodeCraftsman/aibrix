@@ -31,7 +31,8 @@ import (
 )
 
 func (s *Server) HandleRequestBody(ctx context.Context, requestID string, requestPath string, req *extProcPb.ProcessingRequest,
-	user utils.User, routingAlgorithm types.RoutingAlgorithm) (*extProcPb.ProcessingResponse, string, *types.RoutingContext, bool, int64) {
+	user utils.User, routingAlgorithm types.RoutingAlgorithm,
+) (*extProcPb.ProcessingResponse, string, *types.RoutingContext, bool, int64) {
 	var routingCtx *types.RoutingContext
 	var term int64 // Identify the trace window
 
@@ -42,25 +43,32 @@ func (s *Server) HandleRequestBody(ctx context.Context, requestID string, reques
 	}
 
 	// early reject the request if model doesn't exist.
-	if !s.cache.HasModel(model) {
+	tenantID := "default"
+	if routingCtx != nil && routingCtx.TenantID != "" {
+		tenantID = routingCtx.TenantID
+	}
+	modelKey := utils.NewModelKey(model, tenantID)
+	if !s.cache.HasModelKey(modelKey) {
 		klog.ErrorS(nil, "model doesn't exist in cache, probably wrong model name", "requestID", requestID, "model", model)
 		return generateErrorResponse(envoyTypePb.StatusCode_BadRequest,
 			[]*configPb.HeaderValueOption{{Header: &configPb.HeaderValue{
-				Key: HeaderErrorNoModelBackends, RawValue: []byte(model)}}},
+				Key: HeaderErrorNoModelBackends, RawValue: []byte(model),
+			}}},
 			fmt.Sprintf("model %s does not exist", model)), model, routingCtx, stream, term
 	}
 
 	// early reject if no pods are ready to accept request for a model
-	podsArr, err := s.cache.ListPodsByModel(model)
+	podsArr, err := s.cache.ListPodsByModelKey(modelKey)
 	if err != nil || podsArr == nil || utils.CountRoutablePods(podsArr.All()) == 0 {
 		klog.ErrorS(err, "no ready pod available", "requestID", requestID, "model", model)
 		return generateErrorResponse(envoyTypePb.StatusCode_ServiceUnavailable,
 			[]*configPb.HeaderValueOption{{Header: &configPb.HeaderValue{
-				Key: HeaderErrorNoModelBackends, RawValue: []byte("true")}}},
+				Key: HeaderErrorNoModelBackends, RawValue: []byte("true"),
+			}}},
 			fmt.Sprintf("error on getting pods for model %s", model)), model, routingCtx, stream, term
 	}
 
-	routingCtx = types.NewRoutingContext(ctx, routingAlgorithm, model, message, requestID, user.Name)
+	routingCtx = types.NewRoutingContext(ctx, routingAlgorithm, model, message, requestID, user.Name, tenantID)
 	headers := []*configPb.HeaderValueOption{}
 	if routingAlgorithm == routing.RouterNotSet {
 		headers = buildEnvoyProxyHeaders(headers, HeaderModel, model)
@@ -72,7 +80,8 @@ func (s *Server) HandleRequestBody(ctx context.Context, requestID string, reques
 			return generateErrorResponse(
 				envoyTypePb.StatusCode_ServiceUnavailable,
 				[]*configPb.HeaderValueOption{{Header: &configPb.HeaderValue{
-					Key: HeaderErrorRouting, RawValue: []byte("true")}}},
+					Key: HeaderErrorRouting, RawValue: []byte("true"),
+				}}},
 				"error on selecting target pod"), model, routingCtx, stream, term
 		}
 		headers = buildEnvoyProxyHeaders(headers,
@@ -81,7 +90,8 @@ func (s *Server) HandleRequestBody(ctx context.Context, requestID string, reques
 		klog.InfoS("request start", "requestID", requestID, "requestPath", requestPath, "model", model, "stream", stream, "routingAlgorithm", routingAlgorithm, "targetPodIP", targetPodIP)
 	}
 
-	term = s.cache.AddRequestCount(routingCtx, requestID, model)
+	modelKey = utils.NewModelKey(model, tenantID)
+	term = s.cache.AddRequestCountByModelKey(routingCtx, requestID, modelKey)
 
 	return &extProcPb.ProcessingResponse{
 		Response: &extProcPb.ProcessingResponse_RequestBody{

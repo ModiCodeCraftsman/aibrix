@@ -18,6 +18,7 @@ package cache
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	crdinformers "github.com/vllm-project/aibrix/pkg/client/informers/externalversions"
 	"github.com/vllm-project/aibrix/pkg/utils"
@@ -88,7 +89,8 @@ func initCacheInformers(instance *Store, config *rest.Config, stopCh <-chan stru
 	instance.resyncModelAdapters(modelInformer.GetStore())
 
 	// Log cache state after initialization
-	klog.Infof("Cache initialization completed. Models: %v", instance.ListModels())
+	// TODO: What's the intention here? if we want to print all models we should iterate over th entire cache
+	klog.Infof("Cache initialization completed. Models: %v", instance.ListModels("default"))
 
 	return nil
 }
@@ -137,10 +139,47 @@ func (c *Store) updatePod(oldObj interface{}, newObj interface{}) {
 
 	// Remove old mappings if present, no adapter will be inherited. (Adapters will be rescaned and readded later)
 	if oldOk || existed {
-		odlMetaPod := c.deletePodLocked(oldPod.Name, oldPod.Namespace)
+		// First, find all model adapters associated with this pod and clean them up
+		// This code checks for model adapters specifically (names ending with "adapter")
+		c.metaModels.Range(func(modelKey string, model *Model) bool {
+			// Check if this is a model adapter (e.g., ends with "adapter")
+			parts := strings.Split(modelKey, "/")
+			if len(parts) > 1 && strings.HasSuffix(parts[1], "adapter") {
+				// Get the list of pods in this model adapter
+				podArray := model.Pods.Array()
+				if podArray != nil {
+					podsToDelete := []string{}
+
+					// For each pod in the array
+					for _, pod := range podArray.Pods {
+						if pod.Name == oldPod.Name && pod.Namespace == oldPod.Namespace {
+							// Mark this pod for deletion from this model adapter
+							// We need to find the actual key used to store it
+							if podKey := findPodKeyInModel(model, pod); podKey != "" {
+								podsToDelete = append(podsToDelete, podKey)
+							}
+						}
+					}
+
+					// Delete all identified pods from this model adapter
+					for _, podKey := range podsToDelete {
+						model.Pods.Delete(podKey)
+					}
+
+					// If no pods left, we could clean up the model entry completely
+					if model.Pods.Len() == 0 {
+						c.metaModels.Delete(modelKey)
+					}
+				}
+			}
+			return true
+		})
+
+		// Now delete the pod and its regular model mappings
+		odlMetaPod := c.deletePodLocked(oldPod.Name, oldPod.Namespace, "default")
 		if odlMetaPod != nil {
 			for _, modelName := range odlMetaPod.Models.Array() {
-				c.deletePodAndModelMappingLocked(odlMetaPod.Name, odlMetaPod.Namespace, modelName, 1)
+				c.deletePodAndModelMappingLocked(odlMetaPod.Name, odlMetaPod.Namespace, modelName, 1, "default")
 			}
 		}
 	}
@@ -197,10 +236,10 @@ func (c *Store) deletePod(obj interface{}) {
 	defer c.mu.Unlock()
 
 	// delete base model and associated lora models on this pod
-	metaPod := c.deletePodLocked(name, namespace)
+	metaPod := c.deletePodLocked(name, namespace, "default")
 	if metaPod != nil {
 		for _, modelName := range metaPod.Models.Array() {
-			c.deletePodAndModelMappingLocked(name, namespace, modelName, 1)
+			c.deletePodAndModelMappingLocked(name, namespace, modelName, 1, "default")
 		}
 	}
 
@@ -227,11 +266,16 @@ func (c *Store) updateModelAdapter(oldObj interface{}, newObj interface{}) {
 
 	oldModel := oldObj.(*modelv1alpha1.ModelAdapter)
 	newModel := newObj.(*modelv1alpha1.ModelAdapter)
+
+	// Remove old mappings first
 	for _, pod := range oldModel.Status.Instances {
 		// the namespace of the pod is same as the namespace of model
-		c.deletePodAndModelMappingLocked(pod, oldModel.Namespace, oldModel.Name, 0)
+		// Need to delete using both tenant formats
+		c.deletePodAndModelMappingLocked(pod, oldModel.Namespace, oldModel.Name, 0, "default")
+		c.deletePodAndModelMappingLocked(pod, oldModel.Namespace, oldModel.Name, 0, pod)
 	}
 
+	// Add new mappings
 	for _, pod := range newModel.Status.Instances {
 		c.addPodAndModelMappingLockedByName(pod, newModel.Namespace, newModel.Name)
 	}
@@ -256,9 +300,22 @@ func (c *Store) deleteModelAdapter(obj interface{}) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	// For debugging purposes, log the adapter and its instances
+	klog.V(4).Infof("DELETING MODELADAPTER: %s/%s with instances: %v",
+		model.Namespace, model.Name, model.Status.Instances)
+
 	for _, pod := range model.Status.Instances {
 		// the namespace of the pod is same as the namespace of model
-		c.deletePodAndModelMappingLocked(pod, model.Namespace, model.Name, 0)
+
+		// Current usage is inconsistent:
+		// - When model adapters are added, they use both the "default" tenant and the pod name as tenant
+		// - When model adapters are deleted, they need to clean up both formats
+
+		// First try with "default" tenant (standard tenant)
+		c.deletePodAndModelMappingLocked(pod, model.Namespace, model.Name, 0, "default")
+
+		// Also try with podName as tenant (what addPodAndModelMappingLocked also uses)
+		c.deletePodAndModelMappingLocked(pod, model.Namespace, model.Name, 0, pod)
 	}
 
 	klog.V(4).Infof("MODELADAPTER DELETED: %s/%s", model.Namespace, model.Name)
@@ -274,11 +331,21 @@ func (c *Store) addPodLocked(pod *v1.Pod) *Pod {
 	} else {
 		c.bufferPod.Pod = pod
 	}
-	key := fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
-	metaPod, loaded := c.metaPods.LoadOrStore(key, c.bufferPod)
+
+	// Store with legacy key format (namespace/name)
+	legacyKey := fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
+	metaPod, loaded := c.metaPods.LoadOrStore(legacyKey, c.bufferPod)
 	if !loaded {
 		c.bufferPod = nil
 	}
+
+	// Also store with tenant-aware key format (tenant/namespace/name)
+	// This ensures APIs that expect tenant-aware keys will work
+	tenantKey := utils.GeneratePodKey(pod.Namespace, pod.Name, "default")
+	if legacyKey != tenantKey {
+		c.metaPods.LoadOrStore(tenantKey, metaPod)
+	}
+
 	return metaPod
 }
 
@@ -299,40 +366,122 @@ func (c *Store) addPodAndModelMappingLocked(metaPod *Pod, modelName string) {
 			Pods: utils.NewRegistryWithArrayProvider(func(arr []*v1.Pod) *utils.PodArray { return &utils.PodArray{Pods: arr} }),
 		}
 	}
-	metaModel, loaded := c.metaModels.LoadOrStore(modelName, c.bufferModel)
+
+	// Extract pod details
+	namespace := metaPod.Pod.Namespace
+	name := metaPod.Pod.Name
+
+	// We need to use consistent tenants for keys.
+	// There are currently two key formats being used:
+	// 1. Using the pod name as tenant: "podName/modelName"
+	// 2. Using "default" as tenant: "default/modelName"
+	// Let's store model adapters using both formats for backwards compatibility
+
+	// First using "default" tenant (the standard way)
+	defaultTenant := "default"
+	defaultModelKey := utils.GenerateModelKey(modelName, defaultTenant)
+	defaultModel, loaded := c.metaModels.LoadOrStore(defaultModelKey, c.bufferModel)
 	if !loaded {
-		c.bufferModel = nil
+		// Need to create a new buffer since we used this one
+		c.bufferModel = &Model{
+			Pods: utils.NewRegistryWithArrayProvider(func(arr []*v1.Pod) *utils.PodArray { return &utils.PodArray{Pods: arr} }),
+		}
 	}
 
+	// Add the pod->model mapping
 	metaPod.Models.Store(modelName, modelName)
-	key := fmt.Sprintf("%s/%s", metaPod.Namespace, metaPod.Name)
-	metaModel.Pods.Store(key, metaPod.Pod)
+
+	// Add the model->pod mapping using tenant-aware pod key
+	defaultPodKey := utils.GeneratePodKey(namespace, name, defaultTenant)
+	defaultModel.Pods.Store(defaultPodKey, metaPod.Pod)
+
+	// Now using pod name as tenant (what was being done before)
+	podTenant := name
+	podModelKey := fmt.Sprintf("%s/%s", podTenant, modelName)
+	podModel, loaded := c.metaModels.LoadOrStore(podModelKey, c.bufferModel)
+	if !loaded {
+		c.bufferModel = nil // We used our buffer, set to nil
+	}
+
+	// Add the model->pod mapping using pod-tenant pod key
+	podPodKey := fmt.Sprintf("%s/%s/%s", podTenant, namespace, name)
+	podModel.Pods.Store(podPodKey, metaPod.Pod)
+
+	klog.V(5).Infof("Added model mapping: pod=%s/%s, model=%s with both tenant formats",
+		namespace, name, modelName)
 }
 
-func (c *Store) deletePodLocked(podName, podNamespace string) *Pod {
-	key := utils.GeneratePodKey(podNamespace, podName)
-	metaPod, _ := c.metaPods.LoadAndDelete(key)
+func (c *Store) deletePodLocked(podName, podNamespace string, tenantID string) *Pod {
+	if tenantID == "" {
+		tenantID = "default"
+	}
+
+	// First try to load the pod with legacy key format to get the metaPod
+	legacyKey := fmt.Sprintf("%s/%s", podNamespace, podName)
+	metaPod, _ := c.metaPods.Load(legacyKey)
+
+	// Delete from both key formats
+	c.metaPods.Delete(legacyKey)
+
+	// Also delete from tenant-aware key format
+	tenantKey := utils.GeneratePodKey(podNamespace, podName, tenantID)
+	if legacyKey != tenantKey {
+		c.metaPods.Delete(tenantKey)
+	}
+
 	return metaPod
 }
 
 // deletePodAndModelMapping delete mappings between pods and model by specified names.
 // If ignoreMapping > 0, podToModel mapping will be ignored.
 // If ignoreMapping < 0, modelToPod mapping will be ignored
-func (c *Store) deletePodAndModelMappingLocked(podName, namespace, modelName string, ignoreMapping int) {
+func (c *Store) deletePodAndModelMappingLocked(podName, namespace, modelName string, ignoreMapping int, tenantID string) {
+	if tenantID == "" {
+		tenantID = "default"
+	}
+
 	if ignoreMapping <= 0 {
-		key := fmt.Sprintf("%s/%s", namespace, podName)
-		if metaPod, ok := c.metaPods.Load(key); ok {
+		// Handle pod -> model mapping
+		// Try with legacy key first
+		legacyKey := fmt.Sprintf("%s/%s", namespace, podName)
+		if metaPod, ok := c.metaPods.Load(legacyKey); ok {
 			metaPod.Models.Delete(modelName)
 			// PodToModelMapping entry should only be deleted during pod deleting.
+		}
+
+		// Also try with tenant-aware key
+		tenantKey := utils.GeneratePodKey(namespace, podName, tenantID)
+		if metaPod, ok := c.metaPods.Load(tenantKey); ok {
+			metaPod.Models.Delete(modelName)
 		}
 	}
 
 	if ignoreMapping >= 0 {
-		if meta, ok := c.metaModels.Load(modelName); ok {
-			key := fmt.Sprintf("%s/%s", namespace, podName)
-			meta.Pods.Delete(key)
+		// Handle model -> pod mapping
+		// There are two key formats currently in use:
+		// 1. Using "default" tenant: "default/modelName"
+		// 2. Using pod name as tenant: "podName/modelName"
+		// We need to check both
+
+		// First try the default tenant-aware model key
+		defaultModelKey := utils.GenerateModelKey(modelName, "default")
+		if meta, ok := c.metaModels.Load(defaultModelKey); ok {
+			// Delete pod using tenant-aware key
+			defaultPodKey := utils.GeneratePodKey(namespace, podName, "default")
+			meta.Pods.Delete(defaultPodKey)
 			if meta.Pods.Len() == 0 {
-				c.metaModels.Delete(modelName)
+				c.metaModels.Delete(defaultModelKey)
+			}
+		}
+
+		// Then try with pod name as tenant (this is what addPodAndModelMappingLocked often does)
+		podModelKey := fmt.Sprintf("%s/%s", podName, modelName)
+		if meta, ok := c.metaModels.Load(podModelKey); ok {
+			// Delete pod using pod-as-tenant key
+			podPodKey := fmt.Sprintf("%s/%s/%s", podName, namespace, podName)
+			meta.Pods.Delete(podPodKey)
+			if meta.Pods.Len() == 0 {
+				c.metaModels.Delete(podModelKey)
 			}
 		}
 	}
@@ -365,4 +514,32 @@ func (c *Store) resyncModelAdapters(store cache.Store) {
 	}
 
 	klog.Info("ModelAdapter resync completed")
+}
+
+// Helper function to find the key under which a pod is stored in a model
+func findPodKeyInModel(model *Model, targetPod *v1.Pod) string {
+	// Try with various tenant formats and key patterns
+	tenants := []string{"default", targetPod.Name}
+	for _, tenant := range tenants {
+		// Format: tenant/namespace/name
+		podKey := utils.GeneratePodKey(targetPod.Namespace, targetPod.Name, tenant)
+		if pod, exists := model.Pods.Load(podKey); exists && pod.Name == targetPod.Name {
+			return podKey
+		}
+
+		// Legacy format: namespace/name
+		legacyKey := fmt.Sprintf("%s/%s", targetPod.Namespace, targetPod.Name)
+		if pod, exists := model.Pods.Load(legacyKey); exists && pod.Name == targetPod.Name {
+			return legacyKey
+		}
+
+		// Try different patterns for completeness
+		altKey := fmt.Sprintf("%s/%s/%s", tenant, targetPod.Namespace, targetPod.Name)
+		if pod, exists := model.Pods.Load(altKey); exists && pod.Name == targetPod.Name {
+			return altKey
+		}
+	}
+
+	// If none of the expected patterns matched, return empty string
+	return ""
 }

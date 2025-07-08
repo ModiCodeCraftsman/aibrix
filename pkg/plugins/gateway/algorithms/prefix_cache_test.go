@@ -56,11 +56,11 @@ func Test_PrefixCacheE2E(t *testing.T) {
 	// pre_request_count: [p1: 0, p2: 0, p3: 0, p4: 0]
 	// post_request_count: [p1: 0, p2: 0, p3: 0, p4: 1(abcdefgh)]
 	t.Log(input)
-	ctx1 := types.NewRoutingContext(context.Background(), RouterPrefixCache, "m1", input, "r1", "")
+	ctx1 := types.NewRoutingContext(context.Background(), RouterPrefixCache, "m1", input, "r1", "", "default")
 	p4, err := prefixCacheRouter.Route(ctx1, podList)
 	assert.NoError(t, err)
 
-	c.AddRequestCount(ctx1, ctx1.RequestID, ctx1.Model)
+	c.AddRequestCountByModelKey(ctx1, ctx1.RequestID, ctx1.ModelKey())
 	t.Log(p4)
 
 	// no prefix match -> select least request pod
@@ -68,12 +68,12 @@ func Test_PrefixCacheE2E(t *testing.T) {
 	// pre_request_count: [p1: 0, p2: 0, p3: 0, p4: 1(abcdefgh)]
 	// post_request_count: [p1: 0, p2: 0, p3: 1 (wxyz), p4: 1(abcdefgh)]
 	t.Log(input)
-	ctx2 := types.NewRoutingContext(context.Background(), RouterPrefixCache, "m1", input, "r2", "")
+	ctx2 := types.NewRoutingContext(context.Background(), RouterPrefixCache, "m1", input, "r2", "", "default")
 	p3, err := prefixCacheRouter.Route(ctx2, podList)
 	assert.NoError(t, err)
 	assert.NotEqual(t, p4, p3)
 
-	c.AddRequestCount(ctx2, ctx2.RequestID, ctx2.Model)
+	c.AddRequestCountByModelKey(ctx2, ctx2.RequestID, ctx2.ModelKey())
 	t.Log(p3)
 
 	// prefix match, load balanced -> select cached pod
@@ -81,12 +81,12 @@ func Test_PrefixCacheE2E(t *testing.T) {
 	// pre_request_count: [p1: 0, p2: 0, p3: 1 (wxyz), p4: 1(abcdefgh)]
 	// post_request_count: [p1: 0, p2: 0, p3: 1 (wxyz), p4: 2(abcdefgh)]
 	t.Log(input)
-	ctx3 := types.NewRoutingContext(context.Background(), RouterPrefixCache, "m1", input, "r3", "")
+	ctx3 := types.NewRoutingContext(context.Background(), RouterPrefixCache, "m1", input, "r3", "", "default")
 	targetPod, err := prefixCacheRouter.Route(ctx3, podList)
 	assert.NoError(t, err)
 	assert.Equal(t, p4, targetPod)
 
-	c.AddRequestCount(ctx3, ctx3.RequestID, ctx3.Model)
+	c.AddRequestCountByModelKey(ctx3, ctx3.RequestID, ctx3.ModelKey())
 	t.Log(targetPod)
 
 	// prefix match, load imbalanced -> select least request pod
@@ -94,12 +94,12 @@ func Test_PrefixCacheE2E(t *testing.T) {
 	// pre_request_count: [p1: 0, p2: 0, p3: 1 (wxyz), p4: 2(abcdefgh)]
 	// post_request_count: [p1: 0, p2: 1 (abcd), p3: 1 (wxyz), p4: 2(abcdefgh)]
 	t.Log(input)
-	ctx4 := types.NewRoutingContext(context.Background(), RouterPrefixCache, "m1", input, "r4", "")
+	ctx4 := types.NewRoutingContext(context.Background(), RouterPrefixCache, "m1", input, "r4", "", "default")
 	p2, err := prefixCacheRouter.Route(ctx4, podList)
 	assert.NoError(t, err)
 	assert.NotEqual(t, p4, p2)
 
-	c.AddRequestCount(ctx4, ctx4.RequestID, ctx4.Model)
+	c.AddRequestCountByModelKey(ctx4, ctx4.RequestID, ctx4.ModelKey())
 	t.Log(p2)
 
 	// prefix match, load imbalanced -> selects p2 with lower prefix match
@@ -107,12 +107,12 @@ func Test_PrefixCacheE2E(t *testing.T) {
 	// pre_request_count: [p1: 0, p2: 1 (abcd), p3: 1 (wxyz), p4: 2 (abcdefgh)]
 	// post_request_count: [p1: 0, p2: 2 (abcdefghijkl), p3: 1 (wxyz), p4: 2(abcdefgh)]
 	t.Log(input)
-	ctx5 := types.NewRoutingContext(context.Background(), RouterPrefixCache, "m1", input, "r5", "")
+	ctx5 := types.NewRoutingContext(context.Background(), RouterPrefixCache, "m1", input, "r5", "", "default")
 	targetPod, err = prefixCacheRouter.Route(ctx5, podList)
 	assert.NoError(t, err)
 	assert.Equal(t, p2, targetPod)
 
-	c.AddRequestCount(ctx5, ctx5.RequestID, ctx5.Model)
+	c.AddRequestCountByModelKey(ctx5, ctx5.RequestID, ctx5.ModelKey())
 	t.Log(targetPod)
 
 	// prefix match, load balanced -> selects p2 or p3
@@ -120,11 +120,11 @@ func Test_PrefixCacheE2E(t *testing.T) {
 	// pre_request_count: [p1: 0, p2: 2 (abcdefghijkl), p3: 1 (wxyz), p4: 2(abcdefgh)]
 	// post_request_count: [p1: 0, p2: 3 (abcdefghijkl), p3: 1 (wxyz), p4: 2(abcdefgh)]
 	t.Log(input)
-	ctx6 := types.NewRoutingContext(context.Background(), RouterPrefixCache, "m1", input, "r6", "")
+	ctx6 := types.NewRoutingContext(context.Background(), RouterPrefixCache, "m1", input, "r6", "", "default")
 	targetPod, err = prefixCacheRouter.Route(ctx6, podList)
 	assert.NoError(t, err)
 	assert.True(t, slices.Contains([]string{p2, p4}, targetPod))
-	c.AddRequestCount(ctx6, ctx6.RequestID, ctx6.Model)
+	c.AddRequestCountByModelKey(ctx6, ctx6.RequestID, ctx6.ModelKey())
 	t.Log(targetPod)
 
 	// pre prefix match, load imbalance -> select least request pod
@@ -133,9 +133,9 @@ func Test_PrefixCacheE2E(t *testing.T) {
 	// post_request_count: [p1: 1 (abcdefgh), p2: 9 (abcdefghijkl), p3: 1 (wxyz), p4: 2(abcdefgh)]
 	t.Log(input)
 	for i := 0; i < 6; i++ {
-		c.AddRequestCount(ctx6, ctx6.RequestID, ctx6.Model)
+		c.AddRequestCountByModelKey(ctx6, ctx6.RequestID, ctx6.ModelKey())
 	}
-	ctx7 := types.NewRoutingContext(context.Background(), RouterPrefixCache, "m1", input, "r7", "")
+	ctx7 := types.NewRoutingContext(context.Background(), RouterPrefixCache, "m1", input, "r7", "", "default")
 	p1, err := prefixCacheRouter.Route(ctx7, podList)
 	assert.NoError(t, err)
 	assert.False(t, slices.Contains([]string{p2, p3, p4}, p1))
@@ -153,7 +153,8 @@ func getReadyPods() []*v1.Pod {
 						Status: v1.ConditionTrue,
 					},
 				},
-			}},
+			},
+		},
 		{
 			ObjectMeta: metav1.ObjectMeta{Name: "p2"},
 			Status: v1.PodStatus{
@@ -164,7 +165,8 @@ func getReadyPods() []*v1.Pod {
 						Status: v1.ConditionTrue,
 					},
 				},
-			}},
+			},
+		},
 		{
 			ObjectMeta: metav1.ObjectMeta{Name: "p3"},
 			Status: v1.PodStatus{
@@ -175,7 +177,8 @@ func getReadyPods() []*v1.Pod {
 						Status: v1.ConditionTrue,
 					},
 				},
-			}},
+			},
+		},
 		{
 			ObjectMeta: metav1.ObjectMeta{Name: "p4"},
 			Status: v1.PodStatus{
@@ -186,7 +189,8 @@ func getReadyPods() []*v1.Pod {
 						Status: v1.ConditionTrue,
 					},
 				},
-			}},
+			},
+		},
 	}
 }
 
