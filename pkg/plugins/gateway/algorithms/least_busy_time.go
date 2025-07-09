@@ -23,6 +23,7 @@ import (
 	"github.com/vllm-project/aibrix/pkg/cache"
 	"github.com/vllm-project/aibrix/pkg/metrics"
 	"github.com/vllm-project/aibrix/pkg/types"
+	"github.com/vllm-project/aibrix/pkg/utils"
 	v1 "k8s.io/api/core/v1"
 	klog "k8s.io/klog/v2"
 )
@@ -55,7 +56,8 @@ func (r leastBusyTimeRouter) Route(ctx *types.RoutingContext, readyPodList types
 	minBusyTimeRatio := math.MaxFloat64 // <= 1 in general
 
 	for _, pod := range readyPodList.All() {
-		busyTimeRatio, err := r.cache.GetMetricValueByPod(pod.Name, pod.Namespace, metrics.GPUBusyTimeRatio) // todo: replace mock
+		podKey := utils.NewPodKey(pod.Namespace, pod.Name, ctx.TenantID)
+		busyTimeRatio, err := r.cache.GetMetricValueByPodKey(podKey, metrics.GPUBusyTimeRatio) // todo: replace mock
 		if err != nil {
 			klog.Error(err)
 			continue

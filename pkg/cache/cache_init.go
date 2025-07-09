@@ -51,10 +51,10 @@ type Store struct {
 	numRequestsTraces int32                                 // Request trace counter
 
 	// Pod related storage
-	metaPods utils.SyncMap[string, *Pod] // pod_namespace/pod_name -> *Pod
+	metaPods utils.SyncMap[string, *Pod] // tenant/pod_namespace/pod_name -> *Pod
 
 	// Mapping relationships
-	metaModels utils.SyncMap[string, *Model] // model_name -> *Model
+	metaModels utils.SyncMap[string, *Model] // tenant/model_name -> *Model
 
 	// buffer for sync map operations
 	bufferPod   *Pod
@@ -90,7 +90,6 @@ func Get() (Cache, error) {
 //
 //	Store: Initialized cache store instance
 func New(redisClient *redis.Client, prometheusApi prometheusv1.API) *Store {
-
 	store = &Store{
 		initialized:           true,
 		redisClient:           redisClient,

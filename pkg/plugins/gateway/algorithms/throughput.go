@@ -23,14 +23,13 @@ import (
 	"github.com/vllm-project/aibrix/pkg/cache"
 	"github.com/vllm-project/aibrix/pkg/metrics"
 	"github.com/vllm-project/aibrix/pkg/types"
+	"github.com/vllm-project/aibrix/pkg/utils"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 )
 
-var (
-	RouterThroughput types.RoutingAlgorithm = "throughput"
-)
+var RouterThroughput types.RoutingAlgorithm = "throughput"
 
 func init() {
 	Register(RouterThroughput, NewThroughputRouter)
@@ -58,12 +57,18 @@ func (r throughputRouter) Route(ctx *types.RoutingContext, readyPodList types.Po
 	readyPods := readyPodList.All()
 
 	for _, pod := range readyPods {
-		promptThroughput, err := r.cache.GetMetricValueByPodModel(pod.Name, pod.Namespace, ctx.Model, metrics.AvgPromptThroughputToksPerS)
+		promptThroughput, err := r.cache.GetMetricValueByPodModelKey(
+			utils.NewPodKey(pod.Namespace, pod.Name, ctx.TenantID),
+			utils.NewModelKey(ctx.Model, ctx.TenantID),
+			metrics.AvgPromptThroughputToksPerS)
 		if err != nil {
 			klog.Error(err)
 			continue
 		}
-		generationThroughput, err := r.cache.GetMetricValueByPodModel(pod.Name, pod.Namespace, ctx.Model, metrics.AvgGenerationThroughputToksPerS)
+		generationThroughput, err := r.cache.GetMetricValueByPodModelKey(
+			utils.NewPodKey(pod.Namespace, pod.Name, ctx.TenantID),
+			utils.NewModelKey(ctx.Model, ctx.TenantID),
+			metrics.AvgGenerationThroughputToksPerS)
 		if err != nil {
 			klog.Error(err)
 			continue

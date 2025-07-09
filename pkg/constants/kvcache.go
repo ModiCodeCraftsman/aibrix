@@ -29,6 +29,9 @@ const (
 
 	KVCacheAnnotationNodeAffinityDefaultKey = "machine.cluster.vke.volcengine.com/gpu-name"
 
+	// DefaultTenantID is the default tenant ID used when no tenant is specified
+	DefaultTenantID = "default"
+
 	// This config will be deprecated in future, users should specify kvcache backend directly.
 	KVCacheAnnotationMode = "kvcache.orchestration.aibrix.ai/mode"
 

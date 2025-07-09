@@ -36,20 +36,86 @@ const (
 	defaultPodMetricPort = 8000
 )
 
-// GeneratePodKey generates a key in the format "namespace/name" for a given pod.
-func GeneratePodKey(podNamespace, podName string) string {
-	return fmt.Sprintf("%s/%s", podNamespace, podName)
+// GeneratePodKey generates a key in the format "tenant/namespace/name" for a given pod.
+// If tenantID is empty, it defaults to "default".
+func GeneratePodKey(podNamespace, podName string, tenantID string) string {
+	if tenantID == "" {
+		tenantID = "default"
+	}
+	return fmt.Sprintf("%s/%s/%s", tenantID, podNamespace, podName)
 }
 
-// ParsePodKey parses a key in the format "namespace/podName".
-// Returns (namespace, podName, success).
+// ParsePodKey parses a key in the format "tenant/namespace/podName" or legacy format "namespace/podName".
+// Returns (namespace, podName, success) for legacy format.
+// Returns (namespace, podName, success) for new format, ignoring tenant.
 func ParsePodKey(key string) (string, string, bool) {
 	parts := strings.Split(key, "/")
-	if len(parts) != 2 {
-		klog.V(4).Infof("Invalid key format: %q. Expected format: namespace/name", key)
-		return "", "", false
+	if len(parts) == 3 {
+		// New format: tenant/namespace/podName
+		return parts[1], parts[2], true
+	} else if len(parts) == 2 {
+		// Legacy format: namespace/podName
+		return parts[0], parts[1], true
 	}
-	return parts[0], parts[1], true
+	klog.V(4).Infof("Invalid key format: %q. Expected format: tenant/namespace/name or namespace/name", key)
+	return "", "", false
+}
+
+// ParsePodKeyWithTenant parses a key in the format "tenant/namespace/podName" or legacy format "namespace/podName".
+// Returns (tenant, namespace, podName, success).
+// For legacy format, tenant is set to "default".
+func ParsePodKeyWithTenant(key string) (string, string, string, bool) {
+	parts := strings.Split(key, "/")
+	if len(parts) == 3 {
+		// New format: tenant/namespace/podName
+		return parts[0], parts[1], parts[2], true
+	} else if len(parts) == 2 {
+		// Legacy format: namespace/podName, assume default tenant
+		return "default", parts[0], parts[1], true
+	}
+	klog.V(4).Infof("Invalid key format: %q. Expected format: tenant/namespace/name or namespace/name", key)
+	return "", "", "", false
+}
+
+// GenerateModelKey generates a key in the format "tenant/modelName" for a given model.
+// If tenantID is empty, it defaults to "default".
+func GenerateModelKey(modelName string, tenantID string) string {
+	if tenantID == "" {
+		tenantID = "default"
+	}
+	return fmt.Sprintf("%s/%s", tenantID, modelName)
+}
+
+// ParseModelKey parses a key in the format "tenant/modelName" or legacy format "modelName".
+// Returns (modelName, success) for legacy format.
+// Returns (modelName, success) for new format, ignoring tenant.
+func ParseModelKey(key string) (string, bool) {
+	parts := strings.Split(key, "/")
+	if len(parts) == 2 {
+		// New format: tenant/modelName
+		return parts[1], true
+	} else if len(parts) == 1 {
+		// Legacy format: modelName
+		return parts[0], true
+	}
+	klog.V(4).Infof("Invalid model key format: %q. Expected format: tenant/modelName or modelName", key)
+	return "", false
+}
+
+// ParseModelKeyWithTenant parses a key in the format "tenant/modelName" or legacy format "modelName".
+// Returns (tenant, modelName, success).
+// For legacy format, tenant is set to "default".
+func ParseModelKeyWithTenant(key string) (string, string, bool) {
+	parts := strings.Split(key, "/")
+	if len(parts) == 2 {
+		// New format: tenant/modelName
+		return parts[0], parts[1], true
+	} else if len(parts) == 1 {
+		// Legacy format: modelName
+		return "default", parts[0], true
+	}
+	klog.V(4).Infof("Invalid model key format: %q. Expected format: tenant/modelName or modelName", key)
+	return "", "", false
 }
 
 func IsPodActive(p *v1.Pod) bool {

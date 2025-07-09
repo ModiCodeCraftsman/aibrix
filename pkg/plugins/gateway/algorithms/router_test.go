@@ -36,7 +36,7 @@ func podsFromCache(c *cache.Store) *utils.PodArray {
 }
 
 func requestContext(model string) *types.RoutingContext {
-	return types.NewRoutingContext(context.Background(), types.RoutingAlgorithm("random"), model, "", "", "")
+	return types.NewRoutingContext(context.Background(), types.RoutingAlgorithm("random"), model, "", "", "", "default")
 }
 
 func TestNoPods(t *testing.T) {

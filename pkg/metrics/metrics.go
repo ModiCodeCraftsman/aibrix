@@ -51,266 +51,264 @@ const (
 	RealtimeNumRequestsRunning           = "realtime_num_requests_running"
 )
 
-var (
-	// Metrics defines all available metrics, including raw and query-based metrics.
-	Metrics = map[string]Metric{
-		// Counter metrics
-		NumRequestsRunning: {
-			MetricScope:  PodModelMetricScope,
-			MetricSource: PodRawMetrics,
-			MetricType: MetricType{
-				Raw: Counter,
-			},
-			Description: "Number of running requests",
+// Metrics defines all available metrics, including raw and query-based metrics.
+var Metrics = map[string]Metric{
+	// Counter metrics
+	NumRequestsRunning: {
+		MetricScope:  PodModelMetricScope,
+		MetricSource: PodRawMetrics,
+		MetricType: MetricType{
+			Raw: Counter,
 		},
-		NumRequestsWaiting: {
-			MetricScope:  PodModelMetricScope,
-			MetricSource: PodRawMetrics,
-			MetricType: MetricType{
-				Raw: Counter,
-			},
-			Description: "Number of waiting requests",
+		Description: "Number of running requests",
+	},
+	NumRequestsWaiting: {
+		MetricScope:  PodModelMetricScope,
+		MetricSource: PodRawMetrics,
+		MetricType: MetricType{
+			Raw: Counter,
 		},
-		NumRequestsSwapped: {
-			MetricScope:  PodModelMetricScope,
-			MetricSource: PodRawMetrics,
-			MetricType: MetricType{
-				Raw: Counter,
-			},
-			Description: "Number of swapped requests",
+		Description: "Number of waiting requests",
+	},
+	NumRequestsSwapped: {
+		MetricScope:  PodModelMetricScope,
+		MetricSource: PodRawMetrics,
+		MetricType: MetricType{
+			Raw: Counter,
 		},
-		// Gauge metrics
-		AvgPromptThroughputToksPerS: {
-			MetricScope:  PodModelMetricScope,
-			MetricSource: PodRawMetrics,
-			MetricType: MetricType{
-				Raw: Gauge,
-			},
-			Description: "Average prompt throughput in tokens per second",
+		Description: "Number of swapped requests",
+	},
+	// Gauge metrics
+	AvgPromptThroughputToksPerS: {
+		MetricScope:  PodModelMetricScope,
+		MetricSource: PodRawMetrics,
+		MetricType: MetricType{
+			Raw: Gauge,
 		},
-		AvgGenerationThroughputToksPerS: {
-			MetricScope:  PodModelMetricScope,
-			MetricSource: PodRawMetrics,
-			MetricType: MetricType{
-				Raw: Gauge,
-			},
-			Description: "Average generation throughput in tokens per second",
+		Description: "Average prompt throughput in tokens per second",
+	},
+	AvgGenerationThroughputToksPerS: {
+		MetricScope:  PodModelMetricScope,
+		MetricSource: PodRawMetrics,
+		MetricType: MetricType{
+			Raw: Gauge,
 		},
-		// Histogram metrics
-		IterationTokensTotal: {
-			MetricScope:  PodModelMetricScope,
-			MetricSource: PodRawMetrics,
-			MetricType: MetricType{
-				Raw: Histogram,
-			},
-			Description: "Total iteration tokens",
+		Description: "Average generation throughput in tokens per second",
+	},
+	// Histogram metrics
+	IterationTokensTotal: {
+		MetricScope:  PodModelMetricScope,
+		MetricSource: PodRawMetrics,
+		MetricType: MetricType{
+			Raw: Histogram,
 		},
-		TimeToFirstTokenSeconds: {
-			MetricScope:  PodModelMetricScope,
-			MetricSource: PodRawMetrics,
-			MetricType: MetricType{
-				Raw: Histogram,
-			},
-			Description: "Time to first token in seconds",
+		Description: "Total iteration tokens",
+	},
+	TimeToFirstTokenSeconds: {
+		MetricScope:  PodModelMetricScope,
+		MetricSource: PodRawMetrics,
+		MetricType: MetricType{
+			Raw: Histogram,
 		},
-		TimePerOutputTokenSeconds: {
-			MetricScope:  PodModelMetricScope,
-			MetricSource: PodRawMetrics,
-			MetricType: MetricType{
-				Raw: Histogram,
-			},
-			Description: "Time per output token in seconds",
+		Description: "Time to first token in seconds",
+	},
+	TimePerOutputTokenSeconds: {
+		MetricScope:  PodModelMetricScope,
+		MetricSource: PodRawMetrics,
+		MetricType: MetricType{
+			Raw: Histogram,
 		},
-		E2ERequestLatencySeconds: {
-			MetricScope:  PodModelMetricScope,
-			MetricSource: PodRawMetrics,
-			MetricType: MetricType{
-				Raw: Histogram,
-			},
-			Description: "End-to-end request latency in seconds",
+		Description: "Time per output token in seconds",
+	},
+	E2ERequestLatencySeconds: {
+		MetricScope:  PodModelMetricScope,
+		MetricSource: PodRawMetrics,
+		MetricType: MetricType{
+			Raw: Histogram,
 		},
-		RequestQueueTimeSeconds: {
-			MetricScope:  PodModelMetricScope,
-			MetricSource: PodRawMetrics,
-			MetricType: MetricType{
-				Raw: Histogram,
-			},
-			Description: "Request queue time in seconds",
+		Description: "End-to-end request latency in seconds",
+	},
+	RequestQueueTimeSeconds: {
+		MetricScope:  PodModelMetricScope,
+		MetricSource: PodRawMetrics,
+		MetricType: MetricType{
+			Raw: Histogram,
 		},
-		RequestInferenceTimeSeconds: {
-			MetricScope:  PodModelMetricScope,
-			MetricSource: PodRawMetrics,
-			MetricType: MetricType{
-				Raw: Histogram,
-			},
-			Description: "Request inference time in seconds",
+		Description: "Request queue time in seconds",
+	},
+	RequestInferenceTimeSeconds: {
+		MetricScope:  PodModelMetricScope,
+		MetricSource: PodRawMetrics,
+		MetricType: MetricType{
+			Raw: Histogram,
 		},
-		RequestDecodeTimeSeconds: {
-			MetricScope:  PodModelMetricScope,
-			MetricSource: PodRawMetrics,
-			MetricType: MetricType{
-				Raw: Histogram,
-			},
-			Description: "Request decode time in seconds",
+		Description: "Request inference time in seconds",
+	},
+	RequestDecodeTimeSeconds: {
+		MetricScope:  PodModelMetricScope,
+		MetricSource: PodRawMetrics,
+		MetricType: MetricType{
+			Raw: Histogram,
 		},
-		RequestPrefillTimeSeconds: {
-			MetricScope:  PodModelMetricScope,
-			MetricSource: PodRawMetrics,
-			MetricType: MetricType{
-				Raw: Histogram,
-			},
-			Description: "Request prefill time in seconds",
+		Description: "Request decode time in seconds",
+	},
+	RequestPrefillTimeSeconds: {
+		MetricScope:  PodModelMetricScope,
+		MetricSource: PodRawMetrics,
+		MetricType: MetricType{
+			Raw: Histogram,
 		},
-		// Query-based metrics
-		P95TTFT5m: {
-			MetricScope:  PodModelMetricScope,
-			MetricSource: PrometheusEndpoint,
-			MetricType: MetricType{
-				Query: PromQL,
-			},
-			PromQL:      `histogram_quantile(0.95, sum by(le) (rate(vllm:time_to_first_token_seconds_bucket{instance="${instance}", model_name="${model_name}", job="pods"}[5m])))`,
-			Description: "95th ttft in last 5 mins",
+		Description: "Request prefill time in seconds",
+	},
+	// Query-based metrics
+	P95TTFT5m: {
+		MetricScope:  PodModelMetricScope,
+		MetricSource: PrometheusEndpoint,
+		MetricType: MetricType{
+			Query: PromQL,
 		},
-		P95TTFT5mPod: {
-			MetricScope:  PodMetricScope,
-			MetricSource: PrometheusEndpoint,
-			MetricType: MetricType{
-				Query: PromQL,
-			},
-			PromQL:      `histogram_quantile(0.95, sum by(le) (rate(vllm:time_to_first_token_seconds_bucket{instance="${instance}", job="pods"}[5m])))`,
-			Description: "95th ttft in last 5 mins",
+		PromQL:      `histogram_quantile(0.95, sum by(le) (rate(vllm:time_to_first_token_seconds_bucket{instance="${instance}", model_name="${model_name}", job="pods"}[5m])))`,
+		Description: "95th ttft in last 5 mins",
+	},
+	P95TTFT5mPod: {
+		MetricScope:  PodMetricScope,
+		MetricSource: PrometheusEndpoint,
+		MetricType: MetricType{
+			Query: PromQL,
 		},
-		AvgTTFT5mPod: {
-			MetricScope:  PodMetricScope,
-			MetricSource: PrometheusEndpoint,
-			MetricType: MetricType{
-				Query: PromQL,
-			},
-			PromQL:      `increase(vllm:time_to_first_token_seconds_sum{instance="${instance}", job="pods"}[5m]) / increase(vllm:time_to_first_token_seconds_count{instance="${instance}", job="pods"}[5m])`,
-			Description: "Average ttft in last 5 mins",
+		PromQL:      `histogram_quantile(0.95, sum by(le) (rate(vllm:time_to_first_token_seconds_bucket{instance="${instance}", job="pods"}[5m])))`,
+		Description: "95th ttft in last 5 mins",
+	},
+	AvgTTFT5mPod: {
+		MetricScope:  PodMetricScope,
+		MetricSource: PrometheusEndpoint,
+		MetricType: MetricType{
+			Query: PromQL,
 		},
-		P95TPOT5mPod: {
-			MetricScope:  PodMetricScope,
-			MetricSource: PrometheusEndpoint,
-			MetricType: MetricType{
-				Query: PromQL,
-			},
-			PromQL:      `histogram_quantile(0.95, sum by(le) (rate(vllm:time_per_output_token_seconds_bucket{instance="${instance}", job="pods"}[5m])))`,
-			Description: "95th tpot in last 5 mins",
+		PromQL:      `increase(vllm:time_to_first_token_seconds_sum{instance="${instance}", job="pods"}[5m]) / increase(vllm:time_to_first_token_seconds_count{instance="${instance}", job="pods"}[5m])`,
+		Description: "Average ttft in last 5 mins",
+	},
+	P95TPOT5mPod: {
+		MetricScope:  PodMetricScope,
+		MetricSource: PrometheusEndpoint,
+		MetricType: MetricType{
+			Query: PromQL,
 		},
-		AvgTPOT5mPod: {
-			MetricScope:  PodMetricScope,
-			MetricSource: PrometheusEndpoint,
-			MetricType: MetricType{
-				Query: PromQL,
-			},
-			PromQL:      `increase(vllm:time_per_output_token_seconds_sum{instance="${instance}", job="pods"}[5m]) / increase(vllm:time_per_output_token_seconds_sum{instance="${instance}", job="pods"}[5m])`,
-			Description: "Average tpot in last 5 mins",
+		PromQL:      `histogram_quantile(0.95, sum by(le) (rate(vllm:time_per_output_token_seconds_bucket{instance="${instance}", job="pods"}[5m])))`,
+		Description: "95th tpot in last 5 mins",
+	},
+	AvgTPOT5mPod: {
+		MetricScope:  PodMetricScope,
+		MetricSource: PrometheusEndpoint,
+		MetricType: MetricType{
+			Query: PromQL,
 		},
-		AvgPromptToksPerReq: {
-			MetricScope:  PodModelMetricScope,
-			MetricSource: PrometheusEndpoint,
-			MetricType: MetricType{
-				Query: PromQL,
-			},
-			PromQL:      `increase(vllm:request_prompt_tokens_sum{instance="${instance}", model_name="${model_name}", job="pods"}[1d]) / increase(vllm:request_prompt_tokens_count{instance="${instance}", model_name="${model_name}", job="pods"}[1d])`,
-			Description: "Average prompt tokens per request in last day",
+		PromQL:      `increase(vllm:time_per_output_token_seconds_sum{instance="${instance}", job="pods"}[5m]) / increase(vllm:time_per_output_token_seconds_sum{instance="${instance}", job="pods"}[5m])`,
+		Description: "Average tpot in last 5 mins",
+	},
+	AvgPromptToksPerReq: {
+		MetricScope:  PodModelMetricScope,
+		MetricSource: PrometheusEndpoint,
+		MetricType: MetricType{
+			Query: PromQL,
 		},
-		AvgGenerationToksPerReq: {
-			MetricScope:  PodModelMetricScope,
-			MetricSource: PrometheusEndpoint,
-			MetricType: MetricType{
-				Query: PromQL,
-			},
-			PromQL:      `increase(vllm:request_generation_tokens_sum{instance="${instance}", model_name="${model_name}", job="pods"}[1d]) / increase(vllm:request_generation_tokens_count{instance="${instance}", model_name="${model_name}", job="pods"}[1d])`,
-			Description: "Average generation tokens per request in last day",
+		PromQL:      `increase(vllm:request_prompt_tokens_sum{instance="${instance}", model_name="${model_name}", job="pods"}[1d]) / increase(vllm:request_prompt_tokens_count{instance="${instance}", model_name="${model_name}", job="pods"}[1d])`,
+		Description: "Average prompt tokens per request in last day",
+	},
+	AvgGenerationToksPerReq: {
+		MetricScope:  PodModelMetricScope,
+		MetricSource: PrometheusEndpoint,
+		MetricType: MetricType{
+			Query: PromQL,
 		},
-		GPUCacheUsagePerc: {
-			MetricScope:  PodModelMetricScope,
-			MetricSource: PodRawMetrics,
-			MetricType: MetricType{
-				Raw: Counter,
-			},
-			Description: "GPU cache usage percentage",
+		PromQL:      `increase(vllm:request_generation_tokens_sum{instance="${instance}", model_name="${model_name}", job="pods"}[1d]) / increase(vllm:request_generation_tokens_count{instance="${instance}", model_name="${model_name}", job="pods"}[1d])`,
+		Description: "Average generation tokens per request in last day",
+	},
+	GPUCacheUsagePerc: {
+		MetricScope:  PodModelMetricScope,
+		MetricSource: PodRawMetrics,
+		MetricType: MetricType{
+			Raw: Counter,
 		},
-		CPUCacheUsagePerc: {
-			MetricScope:  PodModelMetricScope,
-			MetricSource: PodRawMetrics,
-			MetricType: MetricType{
-				Raw: Counter,
-			},
-			Description: "CPU cache usage percentage",
+		Description: "GPU cache usage percentage",
+	},
+	CPUCacheUsagePerc: {
+		MetricScope:  PodModelMetricScope,
+		MetricSource: PodRawMetrics,
+		MetricType: MetricType{
+			Raw: Counter,
 		},
-		AvgE2ELatencyPod: {
-			MetricScope:  PodMetricScope,
-			MetricSource: PrometheusEndpoint,
-			MetricType: MetricType{
-				Query: PromQL,
-			},
-			PromQL:      `increase(vllm:e2e_request_latency_seconds_sum{instance="${instance}", job="pods"}[5m]) / increase(vllm:e2e_request_latency_seconds_count{instance="${instance}", job="pods"}[5m])`,
-			Description: "Average End-to-end latency in last 5 mins",
+		Description: "CPU cache usage percentage",
+	},
+	AvgE2ELatencyPod: {
+		MetricScope:  PodMetricScope,
+		MetricSource: PrometheusEndpoint,
+		MetricType: MetricType{
+			Query: PromQL,
 		},
-		AvgRequestsPerMinPod: {
-			MetricScope:  PodMetricScope,
-			MetricSource: PrometheusEndpoint,
-			MetricType: MetricType{
-				Query: PromQL,
-			},
-			PromQL:      `increase(vllm:request_success_total{instance="${instance}", job="pods"}[5m]) / 5`,
-			Description: "Average requests throughput per minute in last 5 mins",
+		PromQL:      `increase(vllm:e2e_request_latency_seconds_sum{instance="${instance}", job="pods"}[5m]) / increase(vllm:e2e_request_latency_seconds_count{instance="${instance}", job="pods"}[5m])`,
+		Description: "Average End-to-end latency in last 5 mins",
+	},
+	AvgRequestsPerMinPod: {
+		MetricScope:  PodMetricScope,
+		MetricSource: PrometheusEndpoint,
+		MetricType: MetricType{
+			Query: PromQL,
 		},
-		AvgPromptThroughputToksPerMinPod: {
-			MetricScope:  PodMetricScope,
-			MetricSource: PrometheusEndpoint,
-			MetricType: MetricType{
-				Query: PromQL,
-			},
-			PromQL:      `increase(vllm:prompt_tokens_total{instance="${instance}", job="pods"}[5m]) / 5`,
-			Description: "Average prompt throughput in tokens per minute in last 5 mins",
+		PromQL:      `increase(vllm:request_success_total{instance="${instance}", job="pods"}[5m]) / 5`,
+		Description: "Average requests throughput per minute in last 5 mins",
+	},
+	AvgPromptThroughputToksPerMinPod: {
+		MetricScope:  PodMetricScope,
+		MetricSource: PrometheusEndpoint,
+		MetricType: MetricType{
+			Query: PromQL,
 		},
-		AvgGenerationThroughputToksPerMinPod: {
-			MetricScope:  PodMetricScope,
-			MetricSource: PrometheusEndpoint,
-			MetricType: MetricType{
-				Query: PromQL,
-			},
-			PromQL:      `increase(vllm:generation_tokens_total{instance="${instance}", job="pods"}[5m]) / 5`,
-			Description: "Average generation throughput in tokens per minute in last 5 mins",
+		PromQL:      `increase(vllm:prompt_tokens_total{instance="${instance}", job="pods"}[5m]) / 5`,
+		Description: "Average prompt throughput in tokens per minute in last 5 mins",
+	},
+	AvgGenerationThroughputToksPerMinPod: {
+		MetricScope:  PodMetricScope,
+		MetricSource: PrometheusEndpoint,
+		MetricType: MetricType{
+			Query: PromQL,
 		},
-		MaxLora: {
-			MetricScope:  PodMetricScope,
-			MetricSource: PodRawMetrics,
-			MetricType: MetricType{
-				Query: QueryLabel,
-			},
-			RawMetricName: "lora_requests_info",
-			Description:   "Max count of Lora Adapters",
+		PromQL:      `increase(vllm:generation_tokens_total{instance="${instance}", job="pods"}[5m]) / 5`,
+		Description: "Average generation throughput in tokens per minute in last 5 mins",
+	},
+	MaxLora: {
+		MetricScope:  PodMetricScope,
+		MetricSource: PodRawMetrics,
+		MetricType: MetricType{
+			Query: QueryLabel,
 		},
-		RunningLoraAdapters: {
-			MetricScope:  PodMetricScope,
-			MetricSource: PodRawMetrics,
-			MetricType: MetricType{
-				Query: QueryLabel,
-			},
-			RawMetricName: "lora_requests_info",
-			Description:   "Count of running Lora Adapters",
+		RawMetricName: "lora_requests_info",
+		Description:   "Max count of Lora Adapters",
+	},
+	RunningLoraAdapters: {
+		MetricScope:  PodMetricScope,
+		MetricSource: PodRawMetrics,
+		MetricType: MetricType{
+			Query: QueryLabel,
 		},
-		WaitingLoraAdapters: {
-			MetricScope:  PodMetricScope,
-			MetricSource: PodRawMetrics,
-			MetricType: MetricType{
-				Query: QueryLabel,
-			},
-			RawMetricName: "lora_requests_info",
-			Description:   "Count of waiting Lora Adapters",
+		RawMetricName: "lora_requests_info",
+		Description:   "Count of running Lora Adapters",
+	},
+	WaitingLoraAdapters: {
+		MetricScope:  PodMetricScope,
+		MetricSource: PodRawMetrics,
+		MetricType: MetricType{
+			Query: QueryLabel,
 		},
-		VTCBucketSizeActive: {
-			MetricScope:  PodModelMetricScope,
-			MetricSource: PodRawMetrics,
-			MetricType: MetricType{
-				Raw: Gauge,
-			},
-			Description: "Current adaptive bucket size used by VTC algorithm for token normalization",
+		RawMetricName: "lora_requests_info",
+		Description:   "Count of waiting Lora Adapters",
+	},
+	VTCBucketSizeActive: {
+		MetricScope:  PodModelMetricScope,
+		MetricSource: PodRawMetrics,
+		MetricType: MetricType{
+			Raw: Gauge,
 		},
-	}
-)
+		Description: "Current adaptive bucket size used by VTC algorithm for token normalization",
+	},
+}
