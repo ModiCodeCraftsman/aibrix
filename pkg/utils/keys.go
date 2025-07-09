@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/vllm-project/aibrix/pkg/constants"
 	"k8s.io/klog/v2"
 )
 
@@ -34,7 +35,7 @@ type PodKey struct {
 // If tenantID is empty, it defaults to "default"
 func NewPodKey(namespace, name, tenantID string) PodKey {
 	if tenantID == "" {
-		tenantID = "default"
+		tenantID = constants.DefaultTenantID
 	}
 	return PodKey{
 		Namespace: namespace,
@@ -57,7 +58,7 @@ func ParsePodKeyString(key string) (PodKey, bool) {
 	} else if len(parts) == 2 {
 		// Legacy format: namespace/podName
 		return PodKey{
-			TenantID:  "default",
+			TenantID:  constants.DefaultTenantID,
 			Namespace: parts[0],
 			Name:      parts[1],
 		}, true
@@ -81,7 +82,7 @@ type ModelKey struct {
 // If tenantID is empty, it defaults to "default"
 func NewModelKey(name, tenantID string) ModelKey {
 	if tenantID == "" {
-		tenantID = "default"
+		tenantID = constants.DefaultTenantID
 	}
 	return ModelKey{
 		Name:     name,
@@ -102,7 +103,7 @@ func ParseModelKeyString(key string) (ModelKey, bool) {
 	} else if len(parts) == 1 {
 		// Legacy format: modelName
 		return ModelKey{
-			TenantID: "default",
+			TenantID: constants.DefaultTenantID,
 			Name:     parts[0],
 		}, true
 	}

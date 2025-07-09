@@ -27,6 +27,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/vllm-project/aibrix/pkg/constants"
 	"github.com/vllm-project/aibrix/pkg/metrics"
 	"github.com/vllm-project/aibrix/pkg/types"
 	"github.com/vllm-project/aibrix/pkg/utils"
@@ -74,7 +75,7 @@ func (c *SimpleCache) GetMetricValueByPodModelKey(podKey utils.PodKey, modelKey 
 
 func (c *SimpleCache) GetMetricValueByPodModel(podName, podNamespace, modelName, metricName, tenantID string) (metrics.MetricValue, error) {
 	if tenantID == "" {
-		tenantID = "default"
+		tenantID = constants.DefaultTenantID
 	}
 	podKey := utils.NewPodKey(podNamespace, podName, tenantID)
 	modelKey := utils.NewModelKey(modelName, tenantID)

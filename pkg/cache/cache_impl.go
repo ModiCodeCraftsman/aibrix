@@ -34,6 +34,7 @@ import (
 	"fmt"
 	"sync/atomic"
 
+	"github.com/vllm-project/aibrix/pkg/constants"
 	"github.com/vllm-project/aibrix/pkg/metrics"
 	"github.com/vllm-project/aibrix/pkg/types"
 	"github.com/vllm-project/aibrix/pkg/utils"
@@ -161,7 +162,7 @@ func (c *Store) ListPodsByModelLegacy(modelName string, tenantID string) (types.
 //	[]string: Slice of model names
 func (c *Store) ListModels(tenantID string) []string {
 	if tenantID == "" {
-		tenantID = "default"
+		tenantID = constants.DefaultTenantID
 	}
 
 	// Get all model keys
@@ -339,7 +340,7 @@ func (c *Store) AddRequestCountByModelKey(ctx *types.RoutingContext, requestID s
 //
 // Deprecated: Use AddRequestCountByModelKey with a ModelKey struct instead
 func (c *Store) AddRequestCountLegacy(ctx *types.RoutingContext, requestID string, modelName string) (traceTerm int64) {
-	tenantID := "default"
+	tenantID := constants.DefaultTenantID
 	if ctx != nil && ctx.TenantID != "" {
 		tenantID = ctx.TenantID
 	}
@@ -382,7 +383,7 @@ func (c *Store) DoneRequestCountByModelKey(ctx *types.RoutingContext, requestID 
 //
 // Deprecated: Use DoneRequestCountByModelKey with a ModelKey struct instead
 func (c *Store) DoneRequestCountLegacy(ctx *types.RoutingContext, requestID string, modelName string, traceTerm int64) {
-	tenantID := "default"
+	tenantID := constants.DefaultTenantID
 	if ctx != nil && ctx.TenantID != "" {
 		tenantID = ctx.TenantID
 	}
@@ -436,7 +437,7 @@ func (c *Store) DoneRequestTraceByModelKey(ctx *types.RoutingContext, requestID 
 //
 // Deprecated: Use DoneRequestTraceByModelKey with a ModelKey struct instead
 func (c *Store) DoneRequestTraceLegacy(ctx *types.RoutingContext, requestID string, modelName string, inputTokens, outputTokens, traceTerm int64) {
-	tenantID := "default"
+	tenantID := constants.DefaultTenantID
 	if ctx != nil && ctx.TenantID != "" {
 		tenantID = ctx.TenantID
 	}
