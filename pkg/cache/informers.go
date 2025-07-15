@@ -17,7 +17,6 @@ package cache
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 
 	crdinformers "github.com/vllm-project/aibrix/pkg/client/informers/externalversions"
@@ -125,8 +124,8 @@ func (c *Store) updatePod(oldObj interface{}, newObj interface{}) {
 	newPod := newObj.(*v1.Pod)
 
 	_, oldOk := oldPod.Labels[modelIdentifier]
-	key := fmt.Sprintf("%s/%s", oldPod.Namespace, oldPod.Name)
-	_, existed := c.metaPods.Load(key) // Make sure nothing left.
+	tenantKey := utils.GeneratePodKey(oldPod.Namespace, oldPod.Name, constants.DefaultTenantID)
+	_, existed := c.metaPods.Load(tenantKey) // Make sure nothing left.
 	newModelName, newOk := newPod.Labels[modelIdentifier]
 
 	if !oldOk && !existed && !newOk {
@@ -227,8 +226,8 @@ func (c *Store) deletePod(obj interface{}) {
 			return
 		}
 	}
-	key := fmt.Sprintf("%s/%s", namespace, name)
-	_, existed := c.metaPods.Load(key)
+	tenantKey := utils.GeneratePodKey(namespace, name, constants.DefaultTenantID)
+	_, existed := c.metaPods.Load(tenantKey)
 	if !hasModelLabel && !existed {
 		return
 	}
@@ -463,5 +462,3 @@ func findPodKeyInModel(model *Model, targetPod *v1.Pod) string {
 	// If not found, return empty string
 	return ""
 }
-
-
