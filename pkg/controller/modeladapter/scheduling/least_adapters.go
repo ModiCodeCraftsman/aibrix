@@ -21,6 +21,7 @@ import (
 	"math"
 
 	"github.com/vllm-project/aibrix/pkg/cache"
+	"github.com/vllm-project/aibrix/pkg/constants"
 	"github.com/vllm-project/aibrix/pkg/utils"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
@@ -41,7 +42,7 @@ func (r leastAdapters) SelectPod(ctx context.Context, model string, readyPods []
 	modelAdapterCountMin := math.MaxInt
 
 	for _, pod := range readyPods {
-		podKey := utils.NewPodKey(pod.Namespace, pod.Name, "default") // Using default tenant for now
+		podKey := utils.NewPodKey(pod.Namespace, pod.Name, constants.DefaultTenantID) // Using default tenant for now
 		models, err := r.cache.ListModelsByPodKey(podKey)
 		if err != nil {
 			return nil, err

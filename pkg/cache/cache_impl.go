@@ -53,37 +53,13 @@ import (
 //	*v1.Pod: The found Pod object
 //	error: Error if pod doesn't exist
 func (c *Store) GetPodByKey(key utils.PodKey) (*v1.Pod, error) {
-	// First try to load using the tenant-aware key format
+	// Only look for tenant-aware key format
 	metaPod, ok := c.metaPods.Load(key.String())
 	if !ok {
-		// If not found, try the legacy key format (namespace/name)
-		legacyKey := fmt.Sprintf("%s/%s", key.Namespace, key.Name)
-		metaPod, ok = c.metaPods.Load(legacyKey)
-		if !ok {
-			return nil, fmt.Errorf("key does not exist in the cache: %s", key.String())
-		}
+		return nil, fmt.Errorf("key does not exist in the cache: %s", key.String())
 	}
 
 	return metaPod.Pod, nil
-}
-
-// GetPodLegacy retrieves a Pod object by name components from the cache
-// This method delegates to GetPod with a constructed PodKey
-// Parameters:
-//
-//	podName: Name of the pod to retrieve
-//	podNamespace: Namespace of the pod to retrieve
-//	tenantID: ID of the tenant (defaults to "default" if empty)
-//
-// Returns:
-//
-//	*v1.Pod: The found Pod object
-//	error: Error if pod doesn't exist
-//
-// Deprecated: Use GetPodByKey with a PodKey struct instead
-func (c *Store) GetPodLegacy(podName, podNamespace, tenantID string) (*v1.Pod, error) {
-	key := utils.NewPodKey(podNamespace, podName, tenantID)
-	return c.GetPodByKey(key)
 }
 
 // ListPods returns all cached Pod objects
@@ -120,36 +96,14 @@ func (c *Store) ListPods() []*v1.Pod {
 //	types.PodList: List of Pod objects
 //	error: Error if model doesn't exist
 func (c *Store) ListPodsByModelKey(modelKey utils.ModelKey) (types.PodList, error) {
-	// Try the tenant-aware model key format
+	// Only use the tenant-aware model key format
 	modelKeyStr := modelKey.String()
 	meta, ok := c.metaModels.Load(modelKeyStr)
 	if !ok {
-		// Also try the model key directly in case it's stored differently
-		meta, ok = c.metaModels.Load(utils.GenerateModelKey(modelKey.Name, modelKey.TenantID))
-		if !ok {
-			return nil, fmt.Errorf("model does not exist in the cache: %s (tenant: %s)", modelKey.Name, modelKey.TenantID)
-		}
+		return nil, fmt.Errorf("model does not exist in the cache: %s (tenant: %s)", modelKey.Name, modelKey.TenantID)
 	}
 
 	return meta.Pods.Array(), nil
-}
-
-// ListPodsByModelLegacy gets Pods associated with a specific model
-// This method delegates to ListPodsByModelKey with a constructed ModelKey
-// Parameters:
-//
-//	modelName: Name of the model to query
-//	tenantID: ID of the tenant (defaults to "default" if empty)
-//
-// Returns:
-//
-//	types.PodList: List of Pod objects
-//	error: Error if model doesn't exist
-//
-// Deprecated: Use ListPodsByModelKey with a ModelKey struct instead
-func (c *Store) ListPodsByModelLegacy(modelName string, tenantID string) (types.PodList, error) {
-	modelKey := utils.NewModelKey(modelName, tenantID)
-	return c.ListPodsByModelKey(modelKey)
 }
 
 // ListModels returns all cached model names
@@ -194,23 +148,6 @@ func (c *Store) HasModelKey(modelKey utils.ModelKey) bool {
 	return ok
 }
 
-// HasModelLegacy checks if a model exists in the cache
-// This method delegates to HasModelKey with a constructed ModelKey
-// Parameters:
-//
-//	modelName: Name of the model to check
-//	tenantID: ID of the tenant (defaults to "default" if empty)
-//
-// Returns:
-//
-//	bool: True if model exists
-//
-// Deprecated: Use HasModelKey with a ModelKey struct instead
-func (c *Store) HasModelLegacy(modelName string, tenantID string) bool {
-	modelKey := utils.NewModelKey(modelName, tenantID)
-	return c.HasModelKey(modelKey)
-}
-
 // GetMetricValueByPodKey retrieves metric value for a Pod
 // Parameters:
 //
@@ -228,26 +165,6 @@ func (c *Store) GetMetricValueByPodKey(podKey utils.PodKey, metricName string) (
 	}
 
 	return c.getPodMetricImpl(podKey.Name, &metaPod.Metrics, metricName)
-}
-
-// GetMetricValueByPodLegacy retrieves metric value for a Pod
-// This method delegates to GetMetricValueByPodKey with a constructed PodKey
-// Parameters:
-//
-//	podName: Name of the Pod
-//	podNamespace: Namespace of the Pod
-//	metricName: Name of the metric
-//	tenantID: ID of the tenant (defaults to "default" if empty)
-//
-// Returns:
-//
-//	metrics.MetricValue: The metric value
-//	error: Error if Pod or metric doesn't exist
-//
-// Deprecated: Use GetMetricValueByPodKey with a PodKey struct instead
-func (c *Store) GetMetricValueByPodLegacy(podName, podNamespace, metricName, tenantID string) (metrics.MetricValue, error) {
-	podKey := utils.NewPodKey(podNamespace, podName, tenantID)
-	return c.GetMetricValueByPodKey(podKey, metricName)
 }
 
 // GetMetricValueByPodModelKey retrieves metric value for Pod-Model combination
@@ -268,28 +185,6 @@ func (c *Store) GetMetricValueByPodModelKey(podKey utils.PodKey, modelKey utils.
 	}
 
 	return c.getPodMetricImpl(podKey.Name, &metaPod.ModelMetrics, c.getPodModelMetricName(modelKey.Name, metricName))
-}
-
-// GetMetricValueByPodModelLegacy retrieves metric value for Pod-Model combination
-// This method delegates to GetMetricValueByPodModelKey with constructed keys
-// Parameters:
-//
-//	podName: Name of the Pod
-//	podNamespace: Namespace of the Pod
-//	modelName: Name of the model
-//	metricName: Name of the metric
-//	tenantID: ID of the tenant (defaults to "default" if empty)
-//
-// Returns:
-//
-//	metrics.MetricValue: The metric value
-//	error: Error if Pod, model or metric doesn't exist
-//
-// Deprecated: Use GetMetricValueByPodModelKey with PodKey and ModelKey structs instead
-func (c *Store) GetMetricValueByPodModelLegacy(podName, podNamespace, modelName, metricName, tenantID string) (metrics.MetricValue, error) {
-	podKey := utils.NewPodKey(podNamespace, podName, tenantID)
-	modelKey := utils.NewModelKey(modelName, tenantID)
-	return c.GetMetricValueByPodModelKey(podKey, modelKey, metricName)
 }
 
 // AddRequestCountByModelKey tracks new request initiation
@@ -326,29 +221,6 @@ func (c *Store) AddRequestCountByModelKey(ctx *types.RoutingContext, requestID s
 	return
 }
 
-// AddRequestCountLegacy tracks new request initiation
-// This method delegates to AddRequestCountByModelKey with a constructed ModelKey
-// Parameters:
-//
-//	ctx: Routing context
-//	requestID: Unique request identifier
-//	modelName: Model handling the request
-//
-// Returns:
-//
-//	int64: Trace term identifier
-//
-// Deprecated: Use AddRequestCountByModelKey with a ModelKey struct instead
-func (c *Store) AddRequestCountLegacy(ctx *types.RoutingContext, requestID string, modelName string) (traceTerm int64) {
-	tenantID := constants.DefaultTenantID
-	if ctx != nil && ctx.TenantID != "" {
-		tenantID = ctx.TenantID
-	}
-
-	modelKey := utils.NewModelKey(modelName, tenantID)
-	return c.AddRequestCountByModelKey(ctx, requestID, modelKey)
-}
-
 // DoneRequestCountByModelKey completes request tracking
 // Parameters:
 //
@@ -370,26 +242,6 @@ func (c *Store) DoneRequestCountByModelKey(ctx *types.RoutingContext, requestID 
 	if enableGPUOptimizerTracing {
 		c.getRequestTrace(modelKey.String()).DoneRequest(requestID, traceTerm)
 	}
-}
-
-// DoneRequestCountLegacy completes request tracking
-// This method delegates to DoneRequestCountByModelKey with a constructed ModelKey
-// Parameters:
-//
-//	ctx: Routing context
-//	requestID: Unique request identifier
-//	modelName: Model handling the request
-//	traceTerm: Trace term identifier
-//
-// Deprecated: Use DoneRequestCountByModelKey with a ModelKey struct instead
-func (c *Store) DoneRequestCountLegacy(ctx *types.RoutingContext, requestID string, modelName string, traceTerm int64) {
-	tenantID := constants.DefaultTenantID
-	if ctx != nil && ctx.TenantID != "" {
-		tenantID = ctx.TenantID
-	}
-
-	modelKey := utils.NewModelKey(modelName, tenantID)
-	c.DoneRequestCountByModelKey(ctx, requestID, modelKey, traceTerm)
 }
 
 // DoneRequestTraceByModelKey completes request tracing
@@ -424,28 +276,6 @@ func (c *Store) DoneRequestTraceByModelKey(ctx *types.RoutingContext, requestID 
 	}
 }
 
-// DoneRequestTraceLegacy completes request tracing
-// This method delegates to DoneRequestTraceByModelKey with a constructed ModelKey
-// Parameters:
-//
-//	ctx: Routing context
-//	requestID: Unique request identifier
-//	modelName: Model handling the request
-//	inputTokens: Input tokens count
-//	outputTokens: Output tokens count
-//	traceTerm: Trace term identifier
-//
-// Deprecated: Use DoneRequestTraceByModelKey with a ModelKey struct instead
-func (c *Store) DoneRequestTraceLegacy(ctx *types.RoutingContext, requestID string, modelName string, inputTokens, outputTokens, traceTerm int64) {
-	tenantID := constants.DefaultTenantID
-	if ctx != nil && ctx.TenantID != "" {
-		tenantID = ctx.TenantID
-	}
-
-	modelKey := utils.NewModelKey(modelName, tenantID)
-	c.DoneRequestTraceByModelKey(ctx, requestID, modelKey, inputTokens, outputTokens, traceTerm)
-}
-
 // AddSubscriber registers new metric subscriber
 // Parameters:
 //
@@ -465,35 +295,11 @@ func (c *Store) AddSubscriber(subscriber metrics.MetricSubscriber) {
 //	[]string: Slice of model names
 //	error: Error if Pod doesn't exist
 func (c *Store) ListModelsByPodKey(podKey utils.PodKey) ([]string, error) {
-	// First try to load using the tenant-aware key format
+	// Only look for tenant-aware key format
 	metaPod, ok := c.metaPods.Load(podKey.String())
 	if !ok {
-		// If not found, try the legacy key format (namespace/name)
-		legacyKey := fmt.Sprintf("%s/%s", podKey.Namespace, podKey.Name)
-		metaPod, ok = c.metaPods.Load(legacyKey)
-		if !ok {
-			return nil, fmt.Errorf("key does not exist in the cache: %s", podKey.String())
-		}
+		return nil, fmt.Errorf("key does not exist in the cache: %s", podKey.String())
 	}
 
 	return metaPod.Models.Array(), nil
-}
-
-// ListModelsByPodLegacy lists models associated with a Pod
-// This method delegates to ListModelsByPodKey with a constructed PodKey
-// Parameters:
-//
-//	podName: Name of the Pod to query
-//	podNamespace: Namespace of the Pod to query
-//	tenantID: ID of the tenant (defaults to "default" if empty)
-//
-// Returns:
-//
-//	[]string: Slice of model names
-//	error: Error if Pod doesn't exist
-//
-// Deprecated: Use ListModelsByPodKey with a PodKey struct instead
-func (c *Store) ListModelsByPodLegacy(podName, podNamespace, tenantID string) ([]string, error) {
-	podKey := utils.NewPodKey(podNamespace, podName, tenantID)
-	return c.ListModelsByPodKey(podKey)
 }

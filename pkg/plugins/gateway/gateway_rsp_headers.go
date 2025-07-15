@@ -22,6 +22,7 @@ import (
 
 	configPb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	extProcPb "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+	"github.com/vllm-project/aibrix/pkg/constants"
 	"github.com/vllm-project/aibrix/pkg/types"
 	"github.com/vllm-project/aibrix/pkg/utils"
 )
@@ -34,7 +35,7 @@ func (s *Server) HandleResponseHeaders(ctx context.Context, requestID string, mo
 	var processingErrorCode int
 	defer func() {
 		if isProcessingError {
-			tenantID := "default"
+			tenantID := constants.DefaultTenantID
 			if routerCtx != nil && routerCtx.TenantID != "" {
 				tenantID = routerCtx.TenantID
 			}

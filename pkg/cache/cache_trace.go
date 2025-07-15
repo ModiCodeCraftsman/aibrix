@@ -22,6 +22,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/vllm-project/aibrix/pkg/constants"
 	"github.com/vllm-project/aibrix/pkg/metrics"
 	"github.com/vllm-project/aibrix/pkg/types"
 	"github.com/vllm-project/aibrix/pkg/utils"
@@ -55,7 +56,7 @@ func (c *Store) addPodStats(ctx *types.RoutingContext, requestID string) {
 	// Use tenant-aware pod key
 	tenantID := ctx.TenantID
 	if tenantID == "" {
-		tenantID = "default"
+		tenantID = constants.DefaultTenantID
 	}
 
 	key := utils.GeneratePodKey(pod.Namespace, pod.Name, tenantID)
@@ -79,7 +80,7 @@ func (c *Store) donePodStats(ctx *types.RoutingContext, requestID string) {
 	// Use tenant-aware pod key
 	tenantID := ctx.TenantID
 	if tenantID == "" {
-		tenantID = "default"
+		tenantID = constants.DefaultTenantID
 	}
 
 	key := utils.GeneratePodKey(pod.Namespace, pod.Name, tenantID)

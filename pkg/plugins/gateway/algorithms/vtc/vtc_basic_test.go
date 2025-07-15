@@ -87,7 +87,7 @@ func (c *SimpleCache) AddRequestCountByModelKey(ctx *types.RoutingContext, reque
 }
 
 func (c *SimpleCache) AddRequestCount(ctx *types.RoutingContext, requestID string, modelName string) int64 {
-	tenantID := "default"
+	tenantID := constants.DefaultTenantID
 	if ctx != nil && ctx.TenantID != "" {
 		tenantID = ctx.TenantID
 	}
@@ -99,7 +99,7 @@ func (c *SimpleCache) DoneRequestCountByModelKey(ctx *types.RoutingContext, requ
 }
 
 func (c *SimpleCache) DoneRequestCount(ctx *types.RoutingContext, requestID string, modelName string, traceTerm int64) {
-	tenantID := "default"
+	tenantID := constants.DefaultTenantID
 	if ctx != nil && ctx.TenantID != "" {
 		tenantID = ctx.TenantID
 	}
@@ -111,7 +111,7 @@ func (c *SimpleCache) DoneRequestTraceByModelKey(ctx *types.RoutingContext, requ
 }
 
 func (c *SimpleCache) DoneRequestTrace(ctx *types.RoutingContext, requestID string, modelName string, inputTokens, outputTokens, traceTerm int64) {
-	tenantID := "default"
+	tenantID := constants.DefaultTenantID
 	if ctx != nil && ctx.TenantID != "" {
 		tenantID = ctx.TenantID
 	}

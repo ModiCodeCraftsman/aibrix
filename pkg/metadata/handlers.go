@@ -25,6 +25,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/redis/go-redis/v9"
 	"github.com/vllm-project/aibrix/pkg/cache"
+	"github.com/vllm-project/aibrix/pkg/constants"
 	"github.com/vllm-project/aibrix/pkg/utils"
 	"k8s.io/klog/v2"
 )
@@ -61,7 +62,7 @@ func NewHTTPServer(addr string, redis *redis.Client) *http.Server {
 
 // models returns base and lora adapters registered to aibrix control plane
 func (s *httpServer) models(w http.ResponseWriter, r *http.Request) {
-	modelNames := s.cache.ListModels("default")
+	modelNames := s.cache.ListModels(constants.DefaultTenantID)
 	response := BuildModelsResponse(modelNames)
 	jsonBytes, err := json.Marshal(response)
 	if err != nil {

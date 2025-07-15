@@ -23,6 +23,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/vllm-project/aibrix/pkg/constants"
 	"github.com/vllm-project/aibrix/pkg/utils"
 	v1 "k8s.io/api/core/v1"
 )
@@ -118,7 +119,7 @@ func (r *RoutingContext) reset(ctx context.Context, algorithms RoutingAlgorithm,
 	r.RequestID = requestID
 	r.User = user
 	if tenantID == "" {
-		r.TenantID = "default"
+		r.TenantID = constants.DefaultTenantID
 	} else {
 		r.TenantID = tenantID
 	}
