@@ -19,11 +19,10 @@ package gateway
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-
-	"time"
 
 	configPb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	extProcPb "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -36,8 +35,10 @@ import (
 )
 
 // TestRouterAlgorithm is a dedicated routing algorithm for testing
-const TestRouterAlgorithm types.RoutingAlgorithm = "test-router"
-const RouterNotSet types.RoutingAlgorithm = "not-set"
+const (
+	TestRouterAlgorithm types.RoutingAlgorithm = "test-router"
+	RouterNotSet        types.RoutingAlgorithm = "not-set"
+)
 
 // Test_handleRequestBody tests the HandleRequestBody function for various scenarios
 func Test_handleRequestBody(t *testing.T) {
@@ -76,7 +77,7 @@ func Test_handleRequestBody(t *testing.T) {
 			},
 			routingAlgo: "", // No routing strategy
 			mockSetup: func(mockCache *MockCache, _ *mockRouter) {
-				mockCache.On("HasModel", "test-model").Return(true)
+				mockCache.On("HasModelKey", utils.NewModelKey("test-model", "default")).Return(true)
 				podList := &utils.PodArray{
 					Pods: []*v1.Pod{
 						{
@@ -93,8 +94,8 @@ func Test_handleRequestBody(t *testing.T) {
 						},
 					},
 				}
-				mockCache.On("ListPodsByModel", "test-model").Return(podList, nil)
-				mockCache.On("AddRequestCount", mock.Anything, mock.Anything, "test-model").Return(int64(1))
+				mockCache.On("ListPodsByModelKey", utils.NewModelKey("test-model", "default")).Return(podList, nil)
+				mockCache.On("AddRequestCountByModelKey", mock.Anything, mock.Anything, utils.NewModelKey("test-model", "default")).Return(int64(1))
 			},
 			expected: testResponse{
 				statusCode: envoyTypePb.StatusCode_OK,
@@ -130,7 +131,7 @@ func Test_handleRequestBody(t *testing.T) {
 			},
 			routingAlgo: "", // No routing strategy needed for this test
 			mockSetup: func(mockCache *MockCache, _ *mockRouter) {
-				mockCache.On("HasModel", "unknown-model").Return(false)
+				mockCache.On("HasModelKey", utils.NewModelKey("unknown-model", "default")).Return(false)
 			},
 			expected: testResponse{
 				statusCode: envoyTypePb.StatusCode_BadRequest,
@@ -204,9 +205,9 @@ func Test_handleRequestBody(t *testing.T) {
 						},
 					},
 				}
-				mockCache.On("HasModel", "test-model").Return(true)
-				mockCache.On("ListPodsByModel", "test-model").Return(podList, nil)
-				mockCache.On("AddRequestCount", mock.Anything, mock.Anything, "test-model").Return(int64(1))
+				mockCache.On("HasModelKey", utils.NewModelKey("test-model", "default")).Return(true)
+				mockCache.On("ListPodsByModelKey", utils.NewModelKey("test-model", "default")).Return(podList, nil)
+				mockCache.On("AddRequestCountByModelKey", mock.Anything, mock.Anything, utils.NewModelKey("test-model", "default")).Return(int64(1))
 				mockRouter.On("Route", mock.Anything, mock.Anything).Return("1.2.3.4:8000", nil).Once()
 			},
 			expected: testResponse{
@@ -265,7 +266,7 @@ func Test_handleRequestBody(t *testing.T) {
 			},
 			routingAlgo: "invalid-router", // Invalid routing strategy
 			mockSetup: func(mockCache *MockCache, _ *mockRouter) {
-				mockCache.On("HasModel", "test-model").Return(true)
+				mockCache.On("HasModelKey", utils.NewModelKey("test-model", "default")).Return(true)
 				podList := &utils.PodArray{
 					Pods: []*v1.Pod{
 						{
@@ -282,8 +283,8 @@ func Test_handleRequestBody(t *testing.T) {
 						},
 					},
 				}
-				mockCache.On("ListPodsByModel", "test-model").Return(podList, nil)
-				mockCache.On("AddRequestCount", mock.Anything, mock.Anything, "test-model").Return(int64(1))
+				mockCache.On("ListPodsByModelKey", utils.NewModelKey("test-model", "default")).Return(podList, nil)
+				mockCache.On("AddRequestCountByModelKey", mock.Anything, mock.Anything, utils.NewModelKey("test-model", "default")).Return(int64(1))
 			},
 			expected: testResponse{
 				statusCode: envoyTypePb.StatusCode_OK,
@@ -342,35 +343,24 @@ func Test_handleRequestBody(t *testing.T) {
 			},
 			routingAlgo: "", // No routing strategy needed for this test
 			mockSetup: func(mockCache *MockCache, _ *mockRouter) {
-				mockCache.On("HasModel", "test-model").Return(true)
-				// Create pods that exist but are not routable (not ready)
+				mockCache.On("HasModelKey", utils.NewModelKey("test-model", "default")).Return(true)
 				podList := &utils.PodArray{
 					Pods: []*v1.Pod{
 						{
 							Status: v1.PodStatus{
-								PodIP: "1.2.3.4",
-								Conditions: []v1.PodCondition{
-									{
-										Type:   v1.PodReady,
-										Status: v1.ConditionFalse, // Not ready
-									},
-								},
+								PodIP:      "1.2.3.4",
+								Conditions: []v1.PodCondition{{Type: v1.PodReady, Status: v1.ConditionFalse}}, // Not ready
 							},
 						},
 						{
 							Status: v1.PodStatus{
-								PodIP: "5.6.7.8",
-								Conditions: []v1.PodCondition{
-									{
-										Type:   v1.PodReady,
-										Status: v1.ConditionFalse, // Not ready
-									},
-								},
+								PodIP:      "5.6.7.8",
+								Conditions: []v1.PodCondition{{Type: v1.PodReady, Status: v1.ConditionFalse}}, // Not ready
 							},
 						},
 					},
 				}
-				mockCache.On("ListPodsByModel", "test-model").Return(podList, nil)
+				mockCache.On("ListPodsByModelKey", utils.NewModelKey("test-model", "default")).Return(podList, nil)
 				// No AddRequestCount expectation since the function should return early with error
 			},
 			expected: testResponse{
@@ -412,12 +402,12 @@ func Test_handleRequestBody(t *testing.T) {
 			},
 			routingAlgo: "", // No routing strategy needed for this test
 			mockSetup: func(mockCache *MockCache, _ *mockRouter) {
-				mockCache.On("HasModel", "test-model").Return(true)
-				// Create pods that exist but are not routable (not ready)
+				mockCache.On("HasModelKey", utils.NewModelKey("test-model", "default")).Return(true)
+				// Create empty pod list
 				podList := &utils.PodArray{
 					Pods: []*v1.Pod{},
 				}
-				mockCache.On("ListPodsByModel", "test-model").Return(podList, nil)
+				mockCache.On("ListPodsByModelKey", utils.NewModelKey("test-model", "default")).Return(podList, nil)
 				// No AddRequestCount expectation since the function should return early with error
 			},
 			expected: testResponse{
@@ -459,8 +449,8 @@ func Test_handleRequestBody(t *testing.T) {
 			},
 			routingAlgo: "", // No routing strategy needed for this test
 			mockSetup: func(mockCache *MockCache, _ *mockRouter) {
-				mockCache.On("HasModel", "test-model").Return(true)
-				// Create pods that exist but are not routable (not ready)
+				mockCache.On("HasModelKey", utils.NewModelKey("test-model", "default")).Return(true)
+				// Create pod in termination
 				podList := &utils.PodArray{
 					Pods: []*v1.Pod{
 						{
@@ -479,7 +469,7 @@ func Test_handleRequestBody(t *testing.T) {
 						},
 					},
 				}
-				mockCache.On("ListPodsByModel", "test-model").Return(podList, nil)
+				mockCache.On("ListPodsByModelKey", utils.NewModelKey("test-model", "default")).Return(podList, nil)
 				// No AddRequestCount expectation since the function should return early with error
 			},
 			expected: testResponse{
@@ -521,8 +511,8 @@ func Test_handleRequestBody(t *testing.T) {
 			},
 			routingAlgo: "", // No routing strategy needed for this test
 			mockSetup: func(mockCache *MockCache, _ *mockRouter) {
-				mockCache.On("HasModel", "test-model").Return(true)
-				// Create pods that exist but are not routable (not ready)
+				mockCache.On("HasModelKey", utils.NewModelKey("test-model", "default")).Return(true)
+				// Pod without IP
 				podList := &utils.PodArray{
 					Pods: []*v1.Pod{
 						{
@@ -538,7 +528,7 @@ func Test_handleRequestBody(t *testing.T) {
 						},
 					},
 				}
-				mockCache.On("ListPodsByModel", "test-model").Return(podList, nil)
+				mockCache.On("ListPodsByModelKey", utils.NewModelKey("test-model", "default")).Return(podList, nil)
 				// No AddRequestCount expectation since the function should return early with error
 			},
 			expected: testResponse{

@@ -28,12 +28,14 @@ import (
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
 	extProcPb "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	envoyTypePb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"github.com/vllm-project/aibrix/pkg/cache"
+	"github.com/vllm-project/aibrix/pkg/constants"
 	"github.com/vllm-project/aibrix/pkg/metrics"
 	routing "github.com/vllm-project/aibrix/pkg/plugins/gateway/algorithms"
 	"github.com/vllm-project/aibrix/pkg/plugins/gateway/ratelimiter"
@@ -146,7 +148,12 @@ func (s *Server) Process(srv extProcPb.ExternalProcessor_ProcessServer) error {
 
 		if err := srv.Send(resp); err != nil && len(model) > 0 {
 			klog.ErrorS(nil, err.Error(), "requestID", requestID)
-			s.cache.DoneRequestCount(routerCtx, requestID, model, traceTerm)
+			tenantID := constants.DefaultTenantID
+			if routerCtx != nil && routerCtx.TenantID != "" {
+				tenantID = routerCtx.TenantID
+			}
+			modelKey := utils.NewModelKey(model, tenantID)
+			s.cache.DoneRequestCountByModelKey(routerCtx, requestID, modelKey, traceTerm)
 			if routerCtx != nil {
 				routerCtx.Delete()
 			}
@@ -229,7 +236,8 @@ func (s *Server) Shutdown() {
 }
 
 func (s *Server) responseErrorProcessing(ctx context.Context, resp *extProcPb.ProcessingResponse, respErrorCode int,
-	model, requestID, errMsg string) *extProcPb.ProcessingResponse {
+	model, requestID, errMsg string,
+) *extProcPb.ProcessingResponse {
 	httprouteErr := s.validateHTTPRouteStatus(ctx, model)
 	if errMsg != "" && httprouteErr != nil {
 		errMsg = fmt.Sprintf("%s. %s", errMsg, httprouteErr.Error())

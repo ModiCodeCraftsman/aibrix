@@ -27,6 +27,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/vllm-project/aibrix/pkg/constants"
 	"github.com/vllm-project/aibrix/pkg/metrics"
 	"github.com/vllm-project/aibrix/pkg/types"
 	"github.com/vllm-project/aibrix/pkg/utils"
@@ -43,6 +44,11 @@ func NewSimpleCache() *SimpleCache {
 	}
 }
 
+// AddSubscriber implements the MetricCache interface
+func (c *SimpleCache) AddSubscriber(subscriber metrics.MetricSubscriber) {
+	// No-op implementation for tests
+}
+
 func (c *SimpleCache) SetPodMetric(podKey, modelName, metricName string, value float64) {
 	if _, ok := c.metrics[podKey]; !ok {
 		c.metrics[podKey] = make(map[string]map[string]float64)
@@ -53,55 +59,112 @@ func (c *SimpleCache) SetPodMetric(podKey, modelName, metricName string, value f
 	c.metrics[podKey][modelName][metricName] = value
 }
 
-func (c *SimpleCache) GetMetricValueByPodModel(podName, podNamespace, modelName, metricName string) (metrics.MetricValue, error) {
-	key := utils.GeneratePodKey(podNamespace, podName)
+func (c *SimpleCache) GetMetricValueByPodModelKey(podKey utils.PodKey, modelKey utils.ModelKey, metricName string) (metrics.MetricValue, error) {
+	key := podKey.String()
 	if _, ok := c.metrics[key]; !ok {
 		return &metrics.SimpleMetricValue{Value: 0}, nil
 	}
-	if _, ok := c.metrics[key][modelName]; !ok {
+	if _, ok := c.metrics[key][modelKey.Name]; !ok {
 		return &metrics.SimpleMetricValue{Value: 0}, nil
 	}
-	if value, ok := c.metrics[key][modelName][metricName]; ok {
+	if value, ok := c.metrics[key][modelKey.Name][metricName]; ok {
 		return &metrics.SimpleMetricValue{Value: value}, nil
 	}
 	return &metrics.SimpleMetricValue{Value: 0}, nil
 }
 
-func (c *SimpleCache) AddRequestCount(ctx *types.RoutingContext, requestID string, modelName string) int64 {
+func (c *SimpleCache) GetMetricValueByPodModel(podName, podNamespace, modelName, metricName, tenantID string) (metrics.MetricValue, error) {
+	if tenantID == "" {
+		tenantID = constants.DefaultTenantID
+	}
+	podKey := utils.NewPodKey(podNamespace, podName, tenantID)
+	modelKey := utils.NewModelKey(modelName, tenantID)
+	return c.GetMetricValueByPodModelKey(podKey, modelKey, metricName)
+}
+
+func (c *SimpleCache) AddRequestCountByModelKey(ctx *types.RoutingContext, requestID string, modelKey utils.ModelKey) int64 {
 	return 1
 }
 
+func (c *SimpleCache) AddRequestCount(ctx *types.RoutingContext, requestID string, modelName string) int64 {
+	tenantID := constants.DefaultTenantID
+	if ctx != nil && ctx.TenantID != "" {
+		tenantID = ctx.TenantID
+	}
+	modelKey := utils.NewModelKey(modelName, tenantID)
+	return c.AddRequestCountByModelKey(ctx, requestID, modelKey)
+}
+
+func (c *SimpleCache) DoneRequestCountByModelKey(ctx *types.RoutingContext, requestID string, modelKey utils.ModelKey, traceTerm int64) {
+}
+
 func (c *SimpleCache) DoneRequestCount(ctx *types.RoutingContext, requestID string, modelName string, traceTerm int64) {
+	tenantID := constants.DefaultTenantID
+	if ctx != nil && ctx.TenantID != "" {
+		tenantID = ctx.TenantID
+	}
+	modelKey := utils.NewModelKey(modelName, tenantID)
+	c.DoneRequestCountByModelKey(ctx, requestID, modelKey, traceTerm)
 }
 
-func (c *SimpleCache) DoneRequestTrace(ctx *types.RoutingContext, requestID string, modelName string, traceTerm int64, inputTokens int64, outputTokens int64) {
+func (c *SimpleCache) DoneRequestTraceByModelKey(ctx *types.RoutingContext, requestID string, modelKey utils.ModelKey, inputTokens, outputTokens, traceTerm int64) {
 }
 
-func (c *SimpleCache) GetPod(podName, podNamespace string) (*v1.Pod, error) {
+func (c *SimpleCache) DoneRequestTrace(ctx *types.RoutingContext, requestID string, modelName string, inputTokens, outputTokens, traceTerm int64) {
+	tenantID := constants.DefaultTenantID
+	if ctx != nil && ctx.TenantID != "" {
+		tenantID = ctx.TenantID
+	}
+	modelKey := utils.NewModelKey(modelName, tenantID)
+	c.DoneRequestTraceByModelKey(ctx, requestID, modelKey, inputTokens, outputTokens, traceTerm)
+}
+
+func (c *SimpleCache) GetPodByKey(key utils.PodKey) (*v1.Pod, error) {
 	return nil, nil
 }
 
-func (c *SimpleCache) ListPodsByModel(modelName string) (types.PodList, error) {
+func (c *SimpleCache) GetPod(podName, podNamespace, tenantID string) (*v1.Pod, error) {
+	key := utils.NewPodKey(podNamespace, podName, tenantID)
+	return c.GetPodByKey(key)
+}
+
+func (c *SimpleCache) ListPodsByModelKey(modelKey utils.ModelKey) (types.PodList, error) {
 	return nil, nil
 }
 
-func (c *SimpleCache) HasModel(modelName string) bool {
+func (c *SimpleCache) ListPodsByModel(modelName string, tenantID string) (types.PodList, error) {
+	modelKey := utils.NewModelKey(modelName, tenantID)
+	return c.ListPodsByModelKey(modelKey)
+}
+
+func (c *SimpleCache) HasModelKey(modelKey utils.ModelKey) bool {
 	return true
 }
 
-func (c *SimpleCache) ListModels() []string {
+func (c *SimpleCache) HasModel(modelName string, tenantID string) bool {
+	modelKey := utils.NewModelKey(modelName, tenantID)
+	return c.HasModelKey(modelKey)
+}
+
+func (c *SimpleCache) ListModels(tenantID string) []string {
 	return []string{}
 }
 
-func (c *SimpleCache) ListModelsByPod(podName, podNamespace string) ([]string, error) {
+func (c *SimpleCache) ListModelsByPodKey(podKey utils.PodKey) ([]string, error) {
 	return []string{}, nil
 }
 
-func (c *SimpleCache) GetMetricValueByPod(podName, podNamespace, metricName string) (metrics.MetricValue, error) {
-	return nil, nil
+func (c *SimpleCache) ListModelsByPod(podName, podNamespace, tenantID string) ([]string, error) {
+	podKey := utils.NewPodKey(podNamespace, podName, tenantID)
+	return c.ListModelsByPodKey(podKey)
 }
 
-func (c *SimpleCache) AddSubscriber(subscriber metrics.MetricSubscriber) {
+func (c *SimpleCache) GetMetricValueByPodKey(podKey utils.PodKey, metricName string) (metrics.MetricValue, error) {
+	return &metrics.SimpleMetricValue{Value: 0}, nil
+}
+
+func (c *SimpleCache) GetMetricValueByPod(podName, podNamespace, metricName, tenantID string) (metrics.MetricValue, error) {
+	return &metrics.SimpleMetricValue{Value: 0}, nil
 }
 
 // SimplePodList is a simplified implementation of PodList for testing
@@ -172,9 +235,9 @@ func TestVTCRouterSimple(t *testing.T) {
 	pod3.Name = "pod3"
 
 	// Set up pod metrics for testing
-	pod1Key := utils.GeneratePodKey("default", "pod1")
-	pod2Key := utils.GeneratePodKey("default", "pod2")
-	pod3Key := utils.GeneratePodKey("default", "pod3")
+	pod1Key := utils.GeneratePodKey("default", "pod1", "default")
+	pod2Key := utils.GeneratePodKey("default", "pod2", "default")
+	pod3Key := utils.GeneratePodKey("default", "pod3", "default")
 	cache.SetPodMetric(pod1Key, "model1", metrics.NumRequestsRunning, 0)
 	cache.SetPodMetric(pod2Key, "model1", metrics.NumRequestsRunning, 0)
 	cache.SetPodMetric(pod3Key, "model1", metrics.NumRequestsRunning, 0)
@@ -188,7 +251,7 @@ func TestVTCRouterSimple(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Test 1: With user - should use VTC routing
-	routingCtx := types.NewRoutingContext(ctx, "vtc-basic", "model1", "test message", "request1", user)
+	routingCtx := types.NewRoutingContext(ctx, "vtc-basic", "model1", "test message", "request1", user, "default")
 
 	selectedPodAddress, err := router.Route(routingCtx, podList)
 	assert.NoError(t, err)
@@ -203,7 +266,7 @@ func TestVTCRouterSimple(t *testing.T) {
 	assert.Equal(t, float64(8.0), tokens)
 
 	// Test 2: Route without user - should fall back to random selection
-	routingCtx = types.NewRoutingContext(ctx, "vtc-basic", "model1", "test message", "request2", "") // User is empty string
+	routingCtx = types.NewRoutingContext(ctx, "vtc-basic", "model1", "test message", "request2", "", "default") // User is empty string
 
 	selectedPodAddress, err = router.Route(routingCtx, podList)
 	assert.NoError(t, err)
@@ -253,7 +316,7 @@ func TestVTCBasicRouterStrengths(t *testing.T) {
 
 		// All pods have equal load
 		for i := 0; i < 3; i++ {
-			podKey := utils.GeneratePodKey("default", fmt.Sprintf("pod%d", i+1))
+			podKey := utils.GeneratePodKey("default", fmt.Sprintf("pod%d", i+1), "default")
 			cache.SetPodMetric(podKey, "model1", metrics.NumRequestsRunning, 0)
 		}
 
@@ -263,7 +326,7 @@ func TestVTCBasicRouterStrengths(t *testing.T) {
 		// Route each user and capture results
 		for i, u := range users {
 			_ = tracker.UpdateTokenCount(ctx, u.name, u.tokens, 0)
-			routingCtx := types.NewRoutingContext(ctx, "vtc-basic", "model1", "test", fmt.Sprintf("req-%d", i), u.name)
+			routingCtx := types.NewRoutingContext(ctx, "vtc-basic", "model1", "test", fmt.Sprintf("req-%d", i), u.name, "default")
 			podAddr, err := router.Route(routingCtx, podList)
 			assert.NoError(t, err)
 			podAddresses[i] = podAddr
@@ -297,14 +360,14 @@ func TestVTCBasicRouterStrengths(t *testing.T) {
 		_ = tracker.UpdateTokenCount(ctx, user, 2250, 0)
 
 		// Set different loads on pods
-		pod1Key := utils.GeneratePodKey("default", "pod1")
-		pod2Key := utils.GeneratePodKey("default", "pod2")
-		pod3Key := utils.GeneratePodKey("default", "pod3")
+		pod1Key := utils.GeneratePodKey("default", "pod1", "default")
+		pod2Key := utils.GeneratePodKey("default", "pod2", "default")
+		pod3Key := utils.GeneratePodKey("default", "pod3", "default")
 		cache.SetPodMetric(pod1Key, "model1", metrics.NumRequestsRunning, 80) // High load
 		cache.SetPodMetric(pod2Key, "model1", metrics.NumRequestsRunning, 40) // Medium load
 		cache.SetPodMetric(pod3Key, "model1", metrics.NumRequestsRunning, 10) // Low load
 
-		routingCtx := types.NewRoutingContext(ctx, "vtc-basic", "model1", "test", "load-test", user)
+		routingCtx := types.NewRoutingContext(ctx, "vtc-basic", "model1", "test", "load-test", user, "default")
 		podAddr, err := router.Route(routingCtx, podList)
 		assert.NoError(t, err)
 		// Pod2 should be chosen: fairness equal for pod1/pod2, and load is lower on pod2
@@ -345,7 +408,7 @@ func TestVTCBasicRouterStrengths(t *testing.T) {
 			tr := NewInMemorySlidingWindowTokenTracker(trackerConfig)
 			r := &BasicVTCRouter{cache: cache, tokenTracker: tr, tokenEstimator: tokenEstimator, config: routerConfig}
 			_ = tr.UpdateTokenCount(ctx, "fairUser", tokens, 0)
-			addr, err := r.Route(types.NewRoutingContext(ctx, "vtc-basic", "model1", "test", fmt.Sprintf("req-%v", tokens), "fairUser"), podListF)
+			addr, err := r.Route(types.NewRoutingContext(ctx, "vtc-basic", "model1", "test", fmt.Sprintf("req-%v", tokens), "fairUser", "default"), podListF)
 			assert.NoError(t, err)
 			idx := -1
 			for i, p := range podsF {
@@ -366,8 +429,8 @@ func TestVTCBasicRouterStrengths(t *testing.T) {
 		podListG := NewSimplePodList(podsG)
 
 		// Reset pod loads to 0 to isolate the logarithmic distribution behavior
-		pod1Key := utils.GeneratePodKey("default", "pod1")
-		pod2Key := utils.GeneratePodKey("default", "pod2")
+		pod1Key := utils.GeneratePodKey("default", "pod1", "default")
+		pod2Key := utils.GeneratePodKey("default", "pod2", "default")
 		cache.SetPodMetric(pod1Key, "model1", metrics.NumRequestsRunning, 0)
 		cache.SetPodMetric(pod2Key, "model1", metrics.NumRequestsRunning, 0)
 
@@ -378,7 +441,7 @@ func TestVTCBasicRouterStrengths(t *testing.T) {
 			tr := NewInMemorySlidingWindowTokenTracker(trackerConfig)
 			r := &BasicVTCRouter{cache: cache, tokenTracker: tr, tokenEstimator: tokenEstimator, config: routerConfig}
 			_ = tr.UpdateTokenCount(ctx, "groupUser", tokens, 0)
-			addr, err := r.Route(types.NewRoutingContext(ctx, "vtc-basic", "model1", "test", fmt.Sprintf("req-%v", tokens), "groupUser"), podListG)
+			addr, err := r.Route(types.NewRoutingContext(ctx, "vtc-basic", "model1", "test", fmt.Sprintf("req-%v", tokens), "groupUser", "default"), podListG)
 			assert.NoError(t, err)
 			idx := -1
 			for i, p := range podsG {
@@ -407,12 +470,12 @@ func TestVTCBasicRouterStrengths(t *testing.T) {
 		highList := NewSimplePodList(podsHigh)
 		// Equal loads for all pods
 		for i := 1; i <= 3; i++ {
-			podKey := utils.GeneratePodKey("default", fmt.Sprintf("pod%d", i))
+			podKey := utils.GeneratePodKey("default", fmt.Sprintf("pod%d", i), "default")
 			cache.SetPodMetric(podKey, "model1", metrics.NumRequestsRunning, 0)
 		}
 		// Use tokens > adaptiveBucket*2 to clamp normalizedTokens to last index=2
 		_ = highTracker.UpdateTokenCount(ctx, "highUser", 10000, 0)
-		addr, err := highRouter.Route(types.NewRoutingContext(ctx, "vtc-basic", "model1", "test", "req-high", "highUser"), highList)
+		addr, err := highRouter.Route(types.NewRoutingContext(ctx, "vtc-basic", "model1", "test", "req-high", "highUser", "default"), highList)
 		assert.NoError(t, err)
 		// Should select middle pod (index 1) due to clamped fairness index
 		assert.Equal(t, "192.168.1.2:8000", addr, "High tokens clamp fairness to middle pod index")
@@ -424,7 +487,7 @@ func TestVTCBasicRouterStrengths(t *testing.T) {
 		rfRouter := &BasicVTCRouter{cache: cache, tokenTracker: rfTracker, tokenEstimator: tokenEstimator, config: routerConfig}
 		podsRF := createTestPods(3)
 		rfList := NewSimplePodList(podsRF)
-		routingCtx := types.NewRoutingContext(ctx, "vtc-basic", "model1", "test", "req-rf", "")
+		routingCtx := types.NewRoutingContext(ctx, "vtc-basic", "model1", "test", "req-rf", "", "default")
 		addr, err := rfRouter.Route(routingCtx, rfList)
 		assert.NoError(t, err)
 		assert.Contains(t, []string{"192.168.1.1:8000", "192.168.1.2:8000", "192.168.1.3:8000"}, addr)
@@ -446,7 +509,7 @@ func TestWeightCombinations(t *testing.T) {
 	// Set up pod loads - High, Medium, Low
 	podLoads := []float64{80.0, 40.0, 10.0}
 	for i, pod := range podList.All() {
-		podKey := utils.GeneratePodKey(pod.Namespace, pod.Name)
+		podKey := utils.GeneratePodKey(pod.Namespace, pod.Name, "default")
 		cache.SetPodMetric(podKey, "model1", metrics.NumRequestsRunning, podLoads[i])
 	}
 
@@ -483,7 +546,7 @@ func TestWeightCombinations(t *testing.T) {
 	}()
 
 	// Route the request
-	routingCtx := types.NewRoutingContext(ctx, "vtc-basic", "model1", "test message", "request-weight-test", user)
+	routingCtx := types.NewRoutingContext(ctx, "vtc-basic", "model1", "test message", "request-weight-test", user, "default")
 	selectedPodAddress, err := router.Route(routingCtx, podList)
 	assert.NoError(t, err)
 
@@ -535,7 +598,7 @@ func TestVTCBucketSizePatterns(t *testing.T) {
 	pods := createTestPodsForMetrics(2)
 	podList := NewSimplePodList(pods)
 	for _, pod := range pods {
-		cache.SetPodMetric(utils.GeneratePodKey("default", pod.Name), "model1", metrics.NumRequestsRunning, 0)
+		cache.SetPodMetric(utils.GeneratePodKey("default", pod.Name, "default"), "model1", metrics.NumRequestsRunning, 0)
 	}
 	ctx := context.Background()
 
@@ -601,7 +664,7 @@ func TestVTCBucketSizePatterns(t *testing.T) {
 			}
 
 			requestID := fmt.Sprintf("request-%s-%d", pattern.user, i)
-			routingCtx := types.NewRoutingContext(ctx, "vtc-basic", "model1", "test message", requestID, pattern.user)
+			routingCtx := types.NewRoutingContext(ctx, "vtc-basic", "model1", "test message", requestID, pattern.user, "default")
 
 			_, err = router.Route(routingCtx, podList)
 			if err != nil {

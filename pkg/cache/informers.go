@@ -17,9 +17,10 @@ package cache
 
 import (
 	"errors"
-	"fmt"
+	"strings"
 
 	crdinformers "github.com/vllm-project/aibrix/pkg/client/informers/externalversions"
+	"github.com/vllm-project/aibrix/pkg/constants"
 	"github.com/vllm-project/aibrix/pkg/utils"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/informers"
@@ -88,7 +89,8 @@ func initCacheInformers(instance *Store, config *rest.Config, stopCh <-chan stru
 	instance.resyncModelAdapters(modelInformer.GetStore())
 
 	// Log cache state after initialization
-	klog.Infof("Cache initialization completed. Models: %v", instance.ListModels())
+	// TODO: What's the intention here? if we want to print all models we should iterate over th entire cache
+	klog.Infof("Cache initialization completed. Models: %v", instance.ListModels(constants.DefaultTenantID))
 
 	return nil
 }
@@ -122,8 +124,8 @@ func (c *Store) updatePod(oldObj interface{}, newObj interface{}) {
 	newPod := newObj.(*v1.Pod)
 
 	_, oldOk := oldPod.Labels[modelIdentifier]
-	key := fmt.Sprintf("%s/%s", oldPod.Namespace, oldPod.Name)
-	_, existed := c.metaPods.Load(key) // Make sure nothing left.
+	tenantKey := utils.GeneratePodKey(oldPod.Namespace, oldPod.Name, constants.DefaultTenantID)
+	_, existed := c.metaPods.Load(tenantKey) // Make sure nothing left.
 	newModelName, newOk := newPod.Labels[modelIdentifier]
 
 	if !oldOk && !existed && !newOk {
@@ -137,10 +139,47 @@ func (c *Store) updatePod(oldObj interface{}, newObj interface{}) {
 
 	// Remove old mappings if present, no adapter will be inherited. (Adapters will be rescaned and readded later)
 	if oldOk || existed {
-		odlMetaPod := c.deletePodLocked(oldPod.Name, oldPod.Namespace)
+		// First, find all model adapters associated with this pod and clean them up
+		// This code checks for model adapters specifically (names ending with "adapter")
+		c.metaModels.Range(func(modelKey string, model *Model) bool {
+			// Check if this is a model adapter (e.g., ends with "adapter")
+			parts := strings.Split(modelKey, "/")
+			if len(parts) > 1 && strings.HasSuffix(parts[1], "adapter") {
+				// Get the list of pods in this model adapter
+				podArray := model.Pods.Array()
+				if podArray != nil {
+					podsToDelete := []string{}
+
+					// For each pod in the array
+					for _, pod := range podArray.Pods {
+						if pod.Name == oldPod.Name && pod.Namespace == oldPod.Namespace {
+							// Mark this pod for deletion from this model adapter
+							// We need to find the actual key used to store it
+							if podKey := findPodKeyInModel(model, pod); podKey != "" {
+								podsToDelete = append(podsToDelete, podKey)
+							}
+						}
+					}
+
+					// Delete all identified pods from this model adapter
+					for _, podKey := range podsToDelete {
+						model.Pods.Delete(podKey)
+					}
+
+					// If no pods left, we could clean up the model entry completely
+					if model.Pods.Len() == 0 {
+						c.metaModels.Delete(modelKey)
+					}
+				}
+			}
+			return true
+		})
+
+		// Now delete the pod and its regular model mappings
+		odlMetaPod := c.deletePodLocked(oldPod.Name, oldPod.Namespace, constants.DefaultTenantID)
 		if odlMetaPod != nil {
 			for _, modelName := range odlMetaPod.Models.Array() {
-				c.deletePodAndModelMappingLocked(odlMetaPod.Name, odlMetaPod.Namespace, modelName, 1)
+				c.deletePodAndModelMappingLocked(odlMetaPod.Name, odlMetaPod.Namespace, modelName, 1, constants.DefaultTenantID)
 			}
 		}
 	}
@@ -187,8 +226,8 @@ func (c *Store) deletePod(obj interface{}) {
 			return
 		}
 	}
-	key := fmt.Sprintf("%s/%s", namespace, name)
-	_, existed := c.metaPods.Load(key)
+	tenantKey := utils.GeneratePodKey(namespace, name, constants.DefaultTenantID)
+	_, existed := c.metaPods.Load(tenantKey)
 	if !hasModelLabel && !existed {
 		return
 	}
@@ -197,10 +236,10 @@ func (c *Store) deletePod(obj interface{}) {
 	defer c.mu.Unlock()
 
 	// delete base model and associated lora models on this pod
-	metaPod := c.deletePodLocked(name, namespace)
+	metaPod := c.deletePodLocked(name, namespace, constants.DefaultTenantID)
 	if metaPod != nil {
 		for _, modelName := range metaPod.Models.Array() {
-			c.deletePodAndModelMappingLocked(name, namespace, modelName, 1)
+			c.deletePodAndModelMappingLocked(name, namespace, modelName, 1, constants.DefaultTenantID)
 		}
 	}
 
@@ -227,11 +266,15 @@ func (c *Store) updateModelAdapter(oldObj interface{}, newObj interface{}) {
 
 	oldModel := oldObj.(*modelv1alpha1.ModelAdapter)
 	newModel := newObj.(*modelv1alpha1.ModelAdapter)
+
+	// Remove old mappings first
 	for _, pod := range oldModel.Status.Instances {
 		// the namespace of the pod is same as the namespace of model
-		c.deletePodAndModelMappingLocked(pod, oldModel.Namespace, oldModel.Name, 0)
+		// Use only the standard tenant format
+		c.deletePodAndModelMappingLocked(pod, oldModel.Namespace, oldModel.Name, 0, constants.DefaultTenantID)
 	}
 
+	// Add new mappings
 	for _, pod := range newModel.Status.Instances {
 		c.addPodAndModelMappingLockedByName(pod, newModel.Namespace, newModel.Name)
 	}
@@ -256,9 +299,13 @@ func (c *Store) deleteModelAdapter(obj interface{}) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	// For debugging purposes, log the adapter and its instances
+	klog.V(4).Infof("DELETING MODELADAPTER: %s/%s with instances: %v",
+		model.Namespace, model.Name, model.Status.Instances)
+
 	for _, pod := range model.Status.Instances {
-		// the namespace of the pod is same as the namespace of model
-		c.deletePodAndModelMappingLocked(pod, model.Namespace, model.Name, 0)
+		// Use the consistent tenant-aware key format to delete mappings
+		c.deletePodAndModelMappingLocked(pod, model.Namespace, model.Name, 0, constants.DefaultTenantID)
 	}
 
 	klog.V(4).Infof("MODELADAPTER DELETED: %s/%s", model.Namespace, model.Name)
@@ -274,16 +321,20 @@ func (c *Store) addPodLocked(pod *v1.Pod) *Pod {
 	} else {
 		c.bufferPod.Pod = pod
 	}
-	key := fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
-	metaPod, loaded := c.metaPods.LoadOrStore(key, c.bufferPod)
+
+	// Store using tenant-aware key format (tenant/namespace/name)
+	tenantKey := utils.GeneratePodKey(pod.Namespace, pod.Name, constants.DefaultTenantID)
+	metaPod, loaded := c.metaPods.LoadOrStore(tenantKey, c.bufferPod)
 	if !loaded {
 		c.bufferPod = nil
 	}
+
 	return metaPod
 }
 
 func (c *Store) addPodAndModelMappingLockedByName(podName, namespace, modelName string) {
-	key := fmt.Sprintf("%s/%s", namespace, podName)
+	// Only look up using tenant-aware key
+	key := utils.GeneratePodKey(namespace, podName, constants.DefaultTenantID)
 	pod, ok := c.metaPods.Load(key)
 	if !ok {
 		klog.Errorf("pod %s does not exist in internal-cache", podName)
@@ -299,40 +350,72 @@ func (c *Store) addPodAndModelMappingLocked(metaPod *Pod, modelName string) {
 			Pods: utils.NewRegistryWithArrayProvider(func(arr []*v1.Pod) *utils.PodArray { return &utils.PodArray{Pods: arr} }),
 		}
 	}
-	metaModel, loaded := c.metaModels.LoadOrStore(modelName, c.bufferModel)
+
+	// Extract pod details
+	namespace := metaPod.Pod.Namespace
+	name := metaPod.Pod.Name
+
+	// Use only the standard tenant format for model and pod keys
+	tenantID := constants.DefaultTenantID
+	modelKey := utils.GenerateModelKey(modelName, tenantID)
+	model, loaded := c.metaModels.LoadOrStore(modelKey, c.bufferModel)
 	if !loaded {
+		// Need to create a new buffer since we used this one
 		c.bufferModel = nil
 	}
 
+	// Add the pod->model mapping
 	metaPod.Models.Store(modelName, modelName)
-	key := fmt.Sprintf("%s/%s", metaPod.Namespace, metaPod.Name)
-	metaModel.Pods.Store(key, metaPod.Pod)
+
+	// Add the model->pod mapping using tenant-aware pod key
+	podKey := utils.GeneratePodKey(namespace, name, tenantID)
+	model.Pods.Store(podKey, metaPod.Pod)
+
+	klog.V(5).Infof("Added model mapping: pod=%s/%s, model=%s with tenant: %s",
+		namespace, name, modelName, tenantID)
 }
 
-func (c *Store) deletePodLocked(podName, podNamespace string) *Pod {
-	key := utils.GeneratePodKey(podNamespace, podName)
-	metaPod, _ := c.metaPods.LoadAndDelete(key)
+func (c *Store) deletePodLocked(podName, podNamespace string, tenantID string) *Pod {
+	if tenantID == "" {
+		tenantID = constants.DefaultTenantID
+	}
+
+	// Look up the pod using tenant-aware key format
+	tenantKey := utils.GeneratePodKey(podNamespace, podName, tenantID)
+	metaPod, _ := c.metaPods.Load(tenantKey)
+
+	// Delete the pod from the cache
+	c.metaPods.Delete(tenantKey)
+
 	return metaPod
 }
 
 // deletePodAndModelMapping delete mappings between pods and model by specified names.
 // If ignoreMapping > 0, podToModel mapping will be ignored.
 // If ignoreMapping < 0, modelToPod mapping will be ignored
-func (c *Store) deletePodAndModelMappingLocked(podName, namespace, modelName string, ignoreMapping int) {
+func (c *Store) deletePodAndModelMappingLocked(podName, namespace, modelName string, ignoreMapping int, tenantID string) {
+	if tenantID == "" {
+		tenantID = constants.DefaultTenantID
+	}
+
 	if ignoreMapping <= 0 {
-		key := fmt.Sprintf("%s/%s", namespace, podName)
-		if metaPod, ok := c.metaPods.Load(key); ok {
+		// Handle pod -> model mapping
+		tenantKey := utils.GeneratePodKey(namespace, podName, tenantID)
+		if metaPod, ok := c.metaPods.Load(tenantKey); ok {
 			metaPod.Models.Delete(modelName)
-			// PodToModelMapping entry should only be deleted during pod deleting.
 		}
 	}
 
 	if ignoreMapping >= 0 {
-		if meta, ok := c.metaModels.Load(modelName); ok {
-			key := fmt.Sprintf("%s/%s", namespace, podName)
-			meta.Pods.Delete(key)
+		// Handle model -> pod mapping using only tenant-aware model key
+		modelKey := utils.GenerateModelKey(modelName, constants.DefaultTenantID)
+		if meta, ok := c.metaModels.Load(modelKey); ok {
+			// Delete pod using tenant-aware key
+			podKey := utils.GeneratePodKey(namespace, podName, constants.DefaultTenantID)
+			meta.Pods.Delete(podKey)
+
 			if meta.Pods.Len() == 0 {
-				c.metaModels.Delete(modelName)
+				c.metaModels.Delete(modelKey)
 			}
 		}
 	}
@@ -349,9 +432,10 @@ func (c *Store) resyncModelAdapters(store cache.Store) {
 			c.mu.Lock()
 			// Process each pod instance in the ModelAdapter
 			for _, podName := range modelAdapter.Status.Instances {
-				key := fmt.Sprintf("%s/%s", modelAdapter.Namespace, podName)
-				// Check if pod exists in cache before creating mapping
-				if _, exists := c.metaPods.Load(key); exists {
+				// Use tenant-aware key format only
+				tenantAwareKey := utils.GeneratePodKey(modelAdapter.Namespace, podName, constants.DefaultTenantID)
+
+				if _, exists := c.metaPods.Load(tenantAwareKey); exists {
 					c.addPodAndModelMappingLockedByName(podName, modelAdapter.Namespace, modelAdapter.Name)
 					klog.V(4).Infof("Resynced pod mapping for adapter %s/%s, pod %s",
 						modelAdapter.Namespace, modelAdapter.Name, podName)
@@ -365,4 +449,16 @@ func (c *Store) resyncModelAdapters(store cache.Store) {
 	}
 
 	klog.Info("ModelAdapter resync completed")
+}
+
+// Helper function to find the key under which a pod is stored in a model
+func findPodKeyInModel(model *Model, targetPod *v1.Pod) string {
+	// Just use the standard tenant-aware key format
+	podKey := utils.GeneratePodKey(targetPod.Namespace, targetPod.Name, constants.DefaultTenantID)
+	if pod, exists := model.Pods.Load(podKey); exists && pod.Name == targetPod.Name {
+		return podKey
+	}
+
+	// If not found, return empty string
+	return ""
 }
