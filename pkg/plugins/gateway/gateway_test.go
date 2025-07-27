@@ -34,7 +34,7 @@ import (
 )
 
 func Test_ValidateRoutingStrategy(t *testing.T) {
-	var tests = []struct {
+	tests := []struct {
 		routingStrategy    string
 		message            string
 		expectedValidation bool
@@ -74,7 +74,7 @@ func Test_ValidateRoutingStrategy(t *testing.T) {
 }
 
 func TestGetRoutingStrategy(t *testing.T) {
-	var tests = []struct {
+	tests := []struct {
 		headers               []*configPb.HeaderValue
 		setEnvRoutingStrategy bool
 		envRoutingStrategy    string
@@ -165,25 +165,26 @@ func Test_selectTargetPod(t *testing.T) {
 	}{
 		{
 			name: "routing.Route returns error",
-			pods: &utils.PodArray{Pods: []*v1.Pod{{
-				Status: v1.PodStatus{
-					PodIP:      "1.2.3.4",
-					Conditions: []v1.PodCondition{{Type: v1.PodReady, Status: v1.ConditionTrue}},
-				},
-			},
+			pods: &utils.PodArray{Pods: []*v1.Pod{
 				{
 					Status: v1.PodStatus{
 						PodIP:      "1.2.3.4",
 						Conditions: []v1.PodCondition{{Type: v1.PodReady, Status: v1.ConditionTrue}},
 					},
-				}}},
+				},
+				{
+					Status: v1.PodStatus{
+						PodIP:      "1.2.3.4",
+						Conditions: []v1.PodCondition{{Type: v1.PodReady, Status: v1.ConditionTrue}},
+					},
+				},
+			}},
 			mockSetup: func(mockRouter *mockRouter, algo types.RoutingAlgorithm) {
 				// Register a mock router that returns an error
 				routing.Register(algo, func() (types.Router, error) {
 					return mockRouter, nil
 				})
 				mockRouter.On("Route", mock.Anything, mock.Anything).Return("", errors.New("test error"))
-
 			},
 			expectedError: true,
 		},
@@ -237,18 +238,20 @@ func Test_selectTargetPod(t *testing.T) {
 		},
 		{
 			name: "single ready pod out of two",
-			pods: &utils.PodArray{Pods: []*v1.Pod{{
-				Status: v1.PodStatus{
-					PodIP:      "8.9.10.11",
-					Conditions: []v1.PodCondition{{Type: v1.PodReady, Status: v1.ConditionTrue}},
+			pods: &utils.PodArray{Pods: []*v1.Pod{
+				{
+					Status: v1.PodStatus{
+						PodIP:      "8.9.10.11",
+						Conditions: []v1.PodCondition{{Type: v1.PodReady, Status: v1.ConditionTrue}},
+					},
 				},
-			},
 				{
 					Status: v1.PodStatus{
 						PodIP:      "4.5.6.7",
 						Conditions: []v1.PodCondition{{Type: v1.PodReady, Status: v1.ConditionFalse}},
 					},
-				}}},
+				},
+			}},
 			mockSetup: func(mockRouter *mockRouter, algo types.RoutingAlgorithm) {
 				// Register a mock router, but only one pod is ready so Route should not be called
 				routing.Register(algo, func() (types.Router, error) {
@@ -300,7 +303,7 @@ func Test_selectTargetPod(t *testing.T) {
 			routing.Init()
 
 			server := &Server{}
-			ctx := types.NewRoutingContext(context.Background(), routingAlgo, "test-model", "test-message", "test-request", "test-user")
+			ctx := types.NewRoutingContext(context.Background(), routingAlgo, "test-model", "test-message", "test-request", "test-user", "default")
 
 			// Call selectTargetPod and check the result
 			podIP, err := server.selectTargetPod(ctx, tt.pods)

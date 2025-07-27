@@ -27,9 +27,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 )
 
-var (
-	RouterLeastRequest types.RoutingAlgorithm = "least-request"
-)
+var RouterLeastRequest types.RoutingAlgorithm = "least-request"
 
 func init() {
 	Register(RouterLeastRequest, NewLeastRequestRouter)
@@ -104,7 +102,8 @@ func selectTargetPodWithLeastRequestCount(cache cache.Cache, readyPods []*v1.Pod
 func getRequestCounts(cache cache.Cache, readyPods []*v1.Pod) map[string]int {
 	podRequestCount := map[string]int{}
 	for _, pod := range readyPods {
-		runningReq, err := cache.GetMetricValueByPod(pod.Name, pod.Namespace, metrics.RealtimeNumRequestsRunning)
+		podKey := utils.NewPodKey(pod.Namespace, pod.Name, "default") // Using default tenant for now
+		runningReq, err := cache.GetMetricValueByPodKey(podKey, metrics.RealtimeNumRequestsRunning)
 		if err != nil {
 			runningReq = &metrics.SimpleMetricValue{Value: 0}
 		}

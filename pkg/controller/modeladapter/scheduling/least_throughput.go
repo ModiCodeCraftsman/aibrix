@@ -22,6 +22,7 @@ import (
 
 	"github.com/vllm-project/aibrix/pkg/cache"
 	"github.com/vllm-project/aibrix/pkg/metrics"
+	"github.com/vllm-project/aibrix/pkg/utils"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 )
@@ -41,11 +42,13 @@ func (r leastThroughputScheduler) SelectPod(ctx context.Context, model string, r
 	podThroughputMin := math.MaxFloat64
 
 	for _, pod := range readyPods {
-		promptThroughput, err := r.cache.GetMetricValueByPodModel(pod.Name, pod.Namespace, model, metrics.AvgPromptThroughputToksPerMinPod)
+		podKey := utils.NewPodKey(pod.Namespace, pod.Name, "default") // Using default tenant for now
+		modelKey := utils.NewModelKey(model, "default")
+		promptThroughput, err := r.cache.GetMetricValueByPodModelKey(podKey, modelKey, metrics.AvgPromptThroughputToksPerMinPod)
 		if err != nil {
 			return nil, err
 		}
-		generationThroughput, err := r.cache.GetMetricValueByPodModel(pod.Name, pod.Namespace, model, metrics.AvgGenerationThroughputToksPerMinPod)
+		generationThroughput, err := r.cache.GetMetricValueByPodModelKey(podKey, modelKey, metrics.AvgGenerationThroughputToksPerMinPod)
 		if err != nil {
 			return nil, err
 		}

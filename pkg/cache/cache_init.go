@@ -51,10 +51,10 @@ type Store struct {
 	numRequestsTraces int32                                 // Request trace counter
 
 	// Pod related storage
-	metaPods utils.SyncMap[string, *Pod] // pod_namespace/pod_name -> *Pod
+	metaPods utils.SyncMap[utils.PodKey, *Pod] // Direct PodKey -> *Pod mapping for type safety
 
 	// Mapping relationships
-	metaModels utils.SyncMap[string, *Model] // model_name -> *Model
+	metaModels utils.SyncMap[utils.ModelKey, *Model] // Direct ModelKey -> *Model mapping for type safety
 
 	// buffer for sync map operations
 	bufferPod   *Pod
@@ -90,7 +90,6 @@ func Get() (Cache, error) {
 //
 //	Store: Initialized cache store instance
 func New(redisClient *redis.Client, prometheusApi prometheusv1.API) *Store {
-
 	store = &Store{
 		initialized:           true,
 		redisClient:           redisClient,
@@ -120,12 +119,8 @@ func NewTestCacheWithPods(pods []*v1.Pod, model string) *Store {
 
 func NewTestCacheWithPodsMetrics(pods []*v1.Pod, model string, podMetrics map[string]map[string]metrics.MetricValue) *Store {
 	c := NewTestCacheWithPods(pods, model)
-	c.metaPods.Range(func(key string, metaPod *Pod) bool {
-		_, podName, ok := utils.ParsePodKey(key)
-		if !ok {
-			return true
-		}
-		if podmetrics, ok := podMetrics[podName]; ok {
+	c.metaPods.Range(func(key utils.PodKey, metaPod *Pod) bool {
+		if podmetrics, ok := podMetrics[key.Name]; ok {
 			for metricName, metric := range podmetrics {
 				if err := c.updatePodRecord(metaPod, model, metricName, metrics.PodMetricScope, metric); err != nil {
 					return false

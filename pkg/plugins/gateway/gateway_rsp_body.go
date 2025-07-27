@@ -31,6 +31,7 @@ import (
 	configPb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	extProcPb "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	envoyTypePb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
+	"github.com/vllm-project/aibrix/pkg/constants"
 	"github.com/vllm-project/aibrix/pkg/types"
 	"github.com/vllm-project/aibrix/pkg/utils"
 )
@@ -48,7 +49,12 @@ func (s *Server) HandleResponseBody(ctx context.Context, requestID string, req *
 	defer func() {
 		// Wrapped in a function to delay the evaluation of parameters. Using complete to make sure DoneRequestTrace only call once for a request.
 		if !hasCompleted && complete {
-			s.cache.DoneRequestTrace(routerCtx, requestID, model, promptTokens, completionTokens, traceTerm)
+			tenantID := constants.DefaultTenantID
+			if routerCtx != nil && routerCtx.TenantID != "" {
+				tenantID = routerCtx.TenantID
+			}
+			modelKey := utils.NewModelKey(model, tenantID)
+			s.cache.DoneRequestTraceByModelKey(routerCtx, requestID, modelKey, promptTokens, completionTokens, traceTerm)
 			if routerCtx != nil {
 				routerCtx.Delete()
 			}

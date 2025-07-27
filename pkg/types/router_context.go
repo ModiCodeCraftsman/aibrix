@@ -23,6 +23,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/vllm-project/aibrix/pkg/constants"
 	"github.com/vllm-project/aibrix/pkg/utils"
 	v1 "k8s.io/api/core/v1"
 )
@@ -41,6 +42,7 @@ type RoutingContext struct {
 	Message   string
 	RequestID string
 	User      *string
+	TenantID  string
 
 	targetPodSet chan struct{}
 	targetPod    atomic.Pointer[v1.Pod]
@@ -51,14 +53,28 @@ var requestPool = sync.Pool{
 	New: func() any { return &RoutingContext{} },
 }
 
-func NewRoutingContext(ctx context.Context, algorithms RoutingAlgorithm, model string, message string, requestID string, user string) *RoutingContext {
+func NewRoutingContext(ctx context.Context, algorithms RoutingAlgorithm, model string, message string, requestID string, user string, tenantID string) *RoutingContext {
 	request := requestPool.Get().(*RoutingContext)
 	var userPtr *string
 	if user != "" {
 		userPtr = &user
 	}
-	request.reset(ctx, algorithms, model, message, requestID, userPtr)
+	request.reset(ctx, algorithms, model, message, requestID, userPtr, tenantID)
 	return request
+}
+
+// ModelKey returns a ModelKey struct representing the model and tenant context
+func (r *RoutingContext) ModelKey() utils.ModelKey {
+	return utils.NewModelKey(r.Model, r.TenantID)
+}
+
+// PodKey returns a PodKey struct for the target pod
+func (r *RoutingContext) PodKey() (utils.PodKey, error) {
+	pod := r.TargetPod()
+	if pod == nilPod {
+		return utils.PodKey{}, fmt.Errorf("no target pod set in routing context")
+	}
+	return utils.NewPodKey(pod.Namespace, pod.Name, r.TenantID), nil
 }
 
 func (r *RoutingContext) Delete() {
@@ -95,13 +111,18 @@ func (r *RoutingContext) targetAddress(pod *v1.Pod) string {
 	return fmt.Sprintf("%v:%v", pod.Status.PodIP, utils.GetModelPortForPod(r.RequestID, pod))
 }
 
-func (r *RoutingContext) reset(ctx context.Context, algorithms RoutingAlgorithm, model string, message string, requestID string, user *string) {
+func (r *RoutingContext) reset(ctx context.Context, algorithms RoutingAlgorithm, model string, message string, requestID string, user *string, tenantID string) {
 	r.Context = ctx
 	r.Algorithm = algorithms
 	r.Model = model
 	r.Message = message
 	r.RequestID = requestID
 	r.User = user
+	if tenantID == "" {
+		r.TenantID = constants.DefaultTenantID
+	} else {
+		r.TenantID = tenantID
+	}
 	r.targetPodSet = make(chan struct{}) // Initialize channel
 	r.targetPod.Store(nilPod)
 }

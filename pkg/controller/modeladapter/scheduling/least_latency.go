@@ -22,6 +22,7 @@ import (
 
 	"github.com/vllm-project/aibrix/pkg/cache"
 	"github.com/vllm-project/aibrix/pkg/metrics"
+	"github.com/vllm-project/aibrix/pkg/utils"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 )
@@ -41,11 +42,13 @@ func (r leastLatencyScheduler) SelectPod(ctx context.Context, model string, read
 	podLatencyMin := math.MaxFloat64
 
 	for _, pod := range readyPods {
-		queueTime, err := r.cache.GetMetricValueByPodModel(pod.Name, pod.Namespace, model, metrics.RequestQueueTimeSeconds)
+		podKey := utils.NewPodKey(pod.Namespace, pod.Name, "default") // Using default tenant for now
+		modelKey := utils.NewModelKey(model, "default")
+		queueTime, err := r.cache.GetMetricValueByPodModelKey(podKey, modelKey, metrics.RequestQueueTimeSeconds)
 		if err != nil {
 			return nil, err
 		}
-		inferenceTime, err := r.cache.GetMetricValueByPodModel(pod.Name, pod.Namespace, model, metrics.RequestInferenceTimeSeconds)
+		inferenceTime, err := r.cache.GetMetricValueByPodModelKey(podKey, modelKey, metrics.RequestInferenceTimeSeconds)
 		if err != nil {
 			return nil, err
 		}

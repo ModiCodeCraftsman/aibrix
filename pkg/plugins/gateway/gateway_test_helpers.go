@@ -20,6 +20,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/vllm-project/aibrix/pkg/metrics"
 	"github.com/vllm-project/aibrix/pkg/types"
+	"github.com/vllm-project/aibrix/pkg/utils"
 	v1 "k8s.io/api/core/v1"
 )
 
@@ -39,54 +40,54 @@ type MockCache struct {
 	mock.Mock
 }
 
-func (m *MockCache) HasModel(model string) bool {
-	args := m.Called(model)
+func (m *MockCache) HasModelKey(modelKey utils.ModelKey) bool {
+	args := m.Called(modelKey)
 	return args.Bool(0)
 }
 
-func (m *MockCache) ListPodsByModel(model string) (types.PodList, error) {
-	args := m.Called(model)
+func (m *MockCache) ListPodsByModelKey(modelKey utils.ModelKey) (types.PodList, error) {
+	args := m.Called(modelKey)
 	return args.Get(0).(types.PodList), args.Error(1)
 }
 
-func (m *MockCache) AddRequestCount(ctx *types.RoutingContext, requestID string, model string) int64 {
-	args := m.Called(ctx, requestID, model)
+func (m *MockCache) AddRequestCountByModelKey(ctx *types.RoutingContext, requestID string, modelKey utils.ModelKey) int64 {
+	args := m.Called(ctx, requestID, modelKey)
 	return args.Get(0).(int64)
 }
 
-func (m *MockCache) DoneRequestCount(ctx *types.RoutingContext, requestID string, model string, term int64) {
-	m.Called(ctx, requestID, model, term)
+func (m *MockCache) DoneRequestCountByModelKey(ctx *types.RoutingContext, requestID string, modelKey utils.ModelKey, term int64) {
+	m.Called(ctx, requestID, modelKey, term)
 }
 
-func (m *MockCache) DoneRequestTrace(ctx *types.RoutingContext, requestID string, model string, term int64, inputTokens int64, outputTokens int64) {
-	m.Called(ctx, requestID, model, term, inputTokens, outputTokens)
+func (m *MockCache) DoneRequestTraceByModelKey(ctx *types.RoutingContext, requestID string, modelKey utils.ModelKey, inputTokens, outputTokens, term int64) {
+	m.Called(ctx, requestID, modelKey, inputTokens, outputTokens, term)
 }
 
 func (m *MockCache) AddSubscriber(subscriber metrics.MetricSubscriber) {
 	m.Called(subscriber)
 }
 
-func (m *MockCache) GetMetricValueByPod(namespace string, podName string, metricName string) (metrics.MetricValue, error) {
-	args := m.Called(namespace, podName, metricName)
+func (m *MockCache) GetMetricValueByPodKey(podKey utils.PodKey, metricName string) (metrics.MetricValue, error) {
+	args := m.Called(podKey, metricName)
 	return args.Get(0).(metrics.MetricValue), args.Error(1)
 }
 
-func (m *MockCache) GetMetricValueByPodModel(namespace string, podName string, model string, metricName string) (metrics.MetricValue, error) {
-	args := m.Called(namespace, podName, model, metricName)
+func (m *MockCache) GetMetricValueByPodModelKey(podKey utils.PodKey, modelKey utils.ModelKey, metricName string) (metrics.MetricValue, error) {
+	args := m.Called(podKey, modelKey, metricName)
 	return args.Get(0).(metrics.MetricValue), args.Error(1)
 }
 
-func (m *MockCache) GetPod(namespace string, podName string) (*v1.Pod, error) {
-	args := m.Called(namespace, podName)
+func (m *MockCache) GetPodByKey(key utils.PodKey) (*v1.Pod, error) {
+	args := m.Called(key)
 	return args.Get(0).(*v1.Pod), args.Error(1)
 }
 
-func (m *MockCache) ListModels() []string {
-	args := m.Called()
+func (m *MockCache) ListModels(tenantID string) []string {
+	args := m.Called(tenantID)
 	return args.Get(0).([]string)
 }
 
-func (m *MockCache) ListModelsByPod(namespace string, podName string) ([]string, error) {
-	args := m.Called(namespace, podName)
+func (m *MockCache) ListModelsByPodKey(podKey utils.PodKey) ([]string, error) {
+	args := m.Called(podKey)
 	return args.Get(0).([]string), args.Error(1)
 }

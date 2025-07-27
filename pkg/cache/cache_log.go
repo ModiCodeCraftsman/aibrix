@@ -29,11 +29,8 @@ func (c *Store) debugInfo() {
 		return
 	}
 
-	c.metaPods.Range(func(key string, pod *Pod) bool {
-		_, podName, ok := utils.ParsePodKey(key)
-		if !ok {
-			return true
-		}
+	c.metaPods.Range(func(key utils.PodKey, pod *Pod) bool {
+		podName := key.Name
 		klog.V(4).Infof("pod: %s, podIP: %v, models: %s", podName, pod.Status.PodIP, strings.Join(pod.Models.Array(), " "))
 		pod.Metrics.Range(func(metricName string, metricVal metrics.MetricValue) bool {
 			klog.V(5).Infof("%v_%v_%v", podName, metricName, metricVal)
@@ -45,13 +42,13 @@ func (c *Store) debugInfo() {
 		})
 		return true
 	})
-	c.metaModels.Range(func(modelName string, meta *Model) bool {
+	c.metaModels.Range(func(modelKey utils.ModelKey, meta *Model) bool {
 		var podList strings.Builder
 		for _, pod := range meta.Pods.Registry.Array() {
 			podList.WriteString(pod.Name)
 			podList.WriteByte(' ')
 		}
-		klog.V(4).Infof("model: %s, pods: %s", modelName, podList.String())
+		klog.V(4).Infof("model: %s, pods: %s", modelKey.String(), podList.String())
 		return true
 	})
 }
