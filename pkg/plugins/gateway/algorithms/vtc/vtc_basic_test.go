@@ -187,7 +187,7 @@ func (p *SimplePodList) Len() int {
 }
 
 func (p *SimplePodList) Indexes() []string {
-	return []string{"default"}
+	return []string{constants.DefaultTenantID}
 }
 
 func (p *SimplePodList) ListByIndex(index string) []*v1.Pod {
@@ -235,9 +235,9 @@ func TestVTCRouterSimple(t *testing.T) {
 	pod3.Name = "pod3"
 
 	// Set up pod metrics for testing
-	pod1Key := utils.GeneratePodKey("default", "pod1", "default")
-	pod2Key := utils.GeneratePodKey("default", "pod2", "default")
-	pod3Key := utils.GeneratePodKey("default", "pod3", "default")
+	pod1Key := utils.GeneratePodKey("default", "pod1", constants.DefaultTenantID)
+	pod2Key := utils.GeneratePodKey("default", "pod2", constants.DefaultTenantID)
+	pod3Key := utils.GeneratePodKey("default", "pod3", constants.DefaultTenantID)
 	cache.SetPodMetric(pod1Key, "model1", metrics.NumRequestsRunning, 0)
 	cache.SetPodMetric(pod2Key, "model1", metrics.NumRequestsRunning, 0)
 	cache.SetPodMetric(pod3Key, "model1", metrics.NumRequestsRunning, 0)
@@ -251,7 +251,7 @@ func TestVTCRouterSimple(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Test 1: With user - should use VTC routing
-	routingCtx := types.NewRoutingContext(ctx, "vtc-basic", "model1", "test message", "request1", user, "default")
+	routingCtx := types.NewRoutingContext(ctx, "vtc-basic", "model1", "test message", "request1", user, constants.DefaultTenantID)
 
 	selectedPodAddress, err := router.Route(routingCtx, podList)
 	assert.NoError(t, err)
@@ -266,7 +266,7 @@ func TestVTCRouterSimple(t *testing.T) {
 	assert.Equal(t, float64(8.0), tokens)
 
 	// Test 2: Route without user - should fall back to random selection
-	routingCtx = types.NewRoutingContext(ctx, "vtc-basic", "model1", "test message", "request2", "", "default") // User is empty string
+	routingCtx = types.NewRoutingContext(ctx, "vtc-basic", "model1", "test message", "request2", "", constants.DefaultTenantID) // User is empty string
 
 	selectedPodAddress, err = router.Route(routingCtx, podList)
 	assert.NoError(t, err)
@@ -316,7 +316,7 @@ func TestVTCBasicRouterStrengths(t *testing.T) {
 
 		// All pods have equal load
 		for i := 0; i < 3; i++ {
-			podKey := utils.GeneratePodKey("default", fmt.Sprintf("pod%d", i+1), "default")
+			podKey := utils.GeneratePodKey("default", fmt.Sprintf("pod%d", i+1), constants.DefaultTenantID)
 			cache.SetPodMetric(podKey, "model1", metrics.NumRequestsRunning, 0)
 		}
 
@@ -326,7 +326,7 @@ func TestVTCBasicRouterStrengths(t *testing.T) {
 		// Route each user and capture results
 		for i, u := range users {
 			_ = tracker.UpdateTokenCount(ctx, u.name, u.tokens, 0)
-			routingCtx := types.NewRoutingContext(ctx, "vtc-basic", "model1", "test", fmt.Sprintf("req-%d", i), u.name, "default")
+			routingCtx := types.NewRoutingContext(ctx, "vtc-basic", "model1", "test", fmt.Sprintf("req-%d", i), u.name, constants.DefaultTenantID)
 			podAddr, err := router.Route(routingCtx, podList)
 			assert.NoError(t, err)
 			podAddresses[i] = podAddr
@@ -360,14 +360,14 @@ func TestVTCBasicRouterStrengths(t *testing.T) {
 		_ = tracker.UpdateTokenCount(ctx, user, 2250, 0)
 
 		// Set different loads on pods
-		pod1Key := utils.GeneratePodKey("default", "pod1", "default")
-		pod2Key := utils.GeneratePodKey("default", "pod2", "default")
-		pod3Key := utils.GeneratePodKey("default", "pod3", "default")
+		pod1Key := utils.GeneratePodKey("default", "pod1", constants.DefaultTenantID)
+		pod2Key := utils.GeneratePodKey("default", "pod2", constants.DefaultTenantID)
+		pod3Key := utils.GeneratePodKey("default", "pod3", constants.DefaultTenantID)
 		cache.SetPodMetric(pod1Key, "model1", metrics.NumRequestsRunning, 80) // High load
 		cache.SetPodMetric(pod2Key, "model1", metrics.NumRequestsRunning, 40) // Medium load
 		cache.SetPodMetric(pod3Key, "model1", metrics.NumRequestsRunning, 10) // Low load
 
-		routingCtx := types.NewRoutingContext(ctx, "vtc-basic", "model1", "test", "load-test", user, "default")
+		routingCtx := types.NewRoutingContext(ctx, "vtc-basic", "model1", "test", "load-test", user, constants.DefaultTenantID)
 		podAddr, err := router.Route(routingCtx, podList)
 		assert.NoError(t, err)
 		// Pod2 should be chosen: fairness equal for pod1/pod2, and load is lower on pod2

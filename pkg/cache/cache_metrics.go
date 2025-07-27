@@ -113,7 +113,7 @@ func (c *Store) getPodModelMetricName(modelName string, metricName string) strin
 const defaultPodMetricsWorkerCount = 10
 
 func (c *Store) updatePodMetrics() {
-	c.metaPods.Range(func(key string, metaPod *Pod) bool {
+	c.metaPods.Range(func(key utils.PodKey, metaPod *Pod) bool {
 		if !utils.FilterReadyPod(metaPod.Pod) {
 			// Skip unready pod
 			return true

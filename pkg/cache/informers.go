@@ -124,8 +124,9 @@ func (c *Store) updatePod(oldObj interface{}, newObj interface{}) {
 	newPod := newObj.(*v1.Pod)
 
 	_, oldOk := oldPod.Labels[modelIdentifier]
-	tenantKey := utils.GeneratePodKey(oldPod.Namespace, oldPod.Name, constants.DefaultTenantID)
-	_, existed := c.metaPods.Load(tenantKey) // Make sure nothing left.
+	// TODO: accept the tenant id from the pod labels or use the default tenant
+	podKey := utils.NewPodKey(oldPod.Namespace, oldPod.Name, constants.DefaultTenantID)
+	_, existed := c.metaPods.Load(podKey) // Make sure nothing left.
 	newModelName, newOk := newPod.Labels[modelIdentifier]
 
 	if !oldOk && !existed && !newOk {
@@ -141,10 +142,9 @@ func (c *Store) updatePod(oldObj interface{}, newObj interface{}) {
 	if oldOk || existed {
 		// First, find all model adapters associated with this pod and clean them up
 		// This code checks for model adapters specifically (names ending with "adapter")
-		c.metaModels.Range(func(modelKey string, model *Model) bool {
+		c.metaModels.Range(func(modelKey utils.ModelKey, model *Model) bool {
 			// Check if this is a model adapter (e.g., ends with "adapter")
-			parts := strings.Split(modelKey, "/")
-			if len(parts) > 1 && strings.HasSuffix(parts[1], "adapter") {
+			if strings.HasSuffix(modelKey.Name, "adapter") {
 				// Get the list of pods in this model adapter
 				podArray := model.Pods.Array()
 				if podArray != nil {
@@ -226,8 +226,8 @@ func (c *Store) deletePod(obj interface{}) {
 			return
 		}
 	}
-	tenantKey := utils.GeneratePodKey(namespace, name, constants.DefaultTenantID)
-	_, existed := c.metaPods.Load(tenantKey)
+	podKey := utils.NewPodKey(namespace, name, constants.DefaultTenantID)
+	_, existed := c.metaPods.Load(podKey)
 	if !hasModelLabel && !existed {
 		return
 	}
@@ -322,9 +322,9 @@ func (c *Store) addPodLocked(pod *v1.Pod) *Pod {
 		c.bufferPod.Pod = pod
 	}
 
-	// Store using tenant-aware key format (tenant/namespace/name)
-	tenantKey := utils.GeneratePodKey(pod.Namespace, pod.Name, constants.DefaultTenantID)
-	metaPod, loaded := c.metaPods.LoadOrStore(tenantKey, c.bufferPod)
+	// Use PodKey struct directly
+	podKey := utils.NewPodKey(pod.Namespace, pod.Name, constants.DefaultTenantID)
+	metaPod, loaded := c.metaPods.LoadOrStore(podKey, c.bufferPod)
 	if !loaded {
 		c.bufferPod = nil
 	}
@@ -333,9 +333,9 @@ func (c *Store) addPodLocked(pod *v1.Pod) *Pod {
 }
 
 func (c *Store) addPodAndModelMappingLockedByName(podName, namespace, modelName string) {
-	// Only look up using tenant-aware key
-	key := utils.GeneratePodKey(namespace, podName, constants.DefaultTenantID)
-	pod, ok := c.metaPods.Load(key)
+	// Use PodKey struct directly
+	podKey := utils.NewPodKey(namespace, podName, constants.DefaultTenantID)
+	pod, ok := c.metaPods.Load(podKey)
 	if !ok {
 		klog.Errorf("pod %s does not exist in internal-cache", podName)
 		return
@@ -357,7 +357,7 @@ func (c *Store) addPodAndModelMappingLocked(metaPod *Pod, modelName string) {
 
 	// Use only the standard tenant format for model and pod keys
 	tenantID := constants.DefaultTenantID
-	modelKey := utils.GenerateModelKey(modelName, tenantID)
+	modelKey := utils.NewModelKey(modelName, tenantID)
 	model, loaded := c.metaModels.LoadOrStore(modelKey, c.bufferModel)
 	if !loaded {
 		// Need to create a new buffer since we used this one
@@ -368,8 +368,8 @@ func (c *Store) addPodAndModelMappingLocked(metaPod *Pod, modelName string) {
 	metaPod.Models.Store(modelName, modelName)
 
 	// Add the model->pod mapping using tenant-aware pod key
-	podKey := utils.GeneratePodKey(namespace, name, tenantID)
-	model.Pods.Store(podKey, metaPod.Pod)
+	podKey := utils.NewPodKey(namespace, name, tenantID)
+	model.Pods.Store(podKey.String(), metaPod.Pod) // Still need to use string for the Registry
 
 	klog.V(5).Infof("Added model mapping: pod=%s/%s, model=%s with tenant: %s",
 		namespace, name, modelName, tenantID)
@@ -380,12 +380,12 @@ func (c *Store) deletePodLocked(podName, podNamespace string, tenantID string) *
 		tenantID = constants.DefaultTenantID
 	}
 
-	// Look up the pod using tenant-aware key format
-	tenantKey := utils.GeneratePodKey(podNamespace, podName, tenantID)
-	metaPod, _ := c.metaPods.Load(tenantKey)
+	// Use PodKey struct directly
+	podKey := utils.NewPodKey(podNamespace, podName, tenantID)
+	metaPod, _ := c.metaPods.Load(podKey)
 
 	// Delete the pod from the cache
-	c.metaPods.Delete(tenantKey)
+	c.metaPods.Delete(podKey)
 
 	return metaPod
 }
@@ -400,19 +400,19 @@ func (c *Store) deletePodAndModelMappingLocked(podName, namespace, modelName str
 
 	if ignoreMapping <= 0 {
 		// Handle pod -> model mapping
-		tenantKey := utils.GeneratePodKey(namespace, podName, tenantID)
-		if metaPod, ok := c.metaPods.Load(tenantKey); ok {
+		podKey := utils.NewPodKey(namespace, podName, tenantID)
+		if metaPod, ok := c.metaPods.Load(podKey); ok {
 			metaPod.Models.Delete(modelName)
 		}
 	}
 
 	if ignoreMapping >= 0 {
 		// Handle model -> pod mapping using only tenant-aware model key
-		modelKey := utils.GenerateModelKey(modelName, constants.DefaultTenantID)
+		modelKey := utils.NewModelKey(modelName, constants.DefaultTenantID)
 		if meta, ok := c.metaModels.Load(modelKey); ok {
 			// Delete pod using tenant-aware key
-			podKey := utils.GeneratePodKey(namespace, podName, constants.DefaultTenantID)
-			meta.Pods.Delete(podKey)
+			podKey := utils.NewPodKey(namespace, podName, constants.DefaultTenantID)
+			meta.Pods.Delete(podKey.String()) // Still need to use string for the Registry
 
 			if meta.Pods.Len() == 0 {
 				c.metaModels.Delete(modelKey)
@@ -432,10 +432,10 @@ func (c *Store) resyncModelAdapters(store cache.Store) {
 			c.mu.Lock()
 			// Process each pod instance in the ModelAdapter
 			for _, podName := range modelAdapter.Status.Instances {
-				// Use tenant-aware key format only
-				tenantAwareKey := utils.GeneratePodKey(modelAdapter.Namespace, podName, constants.DefaultTenantID)
+				// Use PodKey struct directly
+				podKey := utils.NewPodKey(modelAdapter.Namespace, podName, constants.DefaultTenantID)
 
-				if _, exists := c.metaPods.Load(tenantAwareKey); exists {
+				if _, exists := c.metaPods.Load(podKey); exists {
 					c.addPodAndModelMappingLockedByName(podName, modelAdapter.Namespace, modelAdapter.Name)
 					klog.V(4).Infof("Resynced pod mapping for adapter %s/%s, pod %s",
 						modelAdapter.Namespace, modelAdapter.Name, podName)

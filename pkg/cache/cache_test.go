@@ -153,7 +153,7 @@ var _ = Describe("Cache", func() {
 		cache.addPod(podWOModel)
 
 		// Using tenant-aware key format for pod lookups
-		tenantPodKey := utils.GeneratePodKey("default", "p1", constants.DefaultTenantID)
+		tenantPodKey := utils.NewPodKey("default", "p1", constants.DefaultTenantID)
 		_, exist := cache.metaPods.Load(tenantPodKey)
 		Expect(exist).To(BeFalse())
 
@@ -171,11 +171,11 @@ var _ = Describe("Cache", func() {
 
 		// Print all keys in metaModels for debugging
 		fmt.Println("Keys in metaModels:")
-		cache.metaModels.Range(func(key string, model *Model) bool {
-			fmt.Printf("  %s\n", key)
+		cache.metaModels.Range(func(key utils.ModelKey, model *Model) bool {
+			fmt.Printf("  %s\n", key.String())
 
 			// Inspect pods in this model using the Array() method
-			fmt.Printf("  Pods in model %s: %d pods\n", key, model.Pods.Len())
+			fmt.Printf("  Pods in model %s: %d pods\n", key.String(), model.Pods.Len())
 			if podArray := model.Pods.Array(); podArray != nil {
 				for i, pod := range podArray.Pods {
 					fmt.Printf("    Pod %d: %s/%s\n", i, pod.Namespace, pod.Name)
@@ -186,7 +186,7 @@ var _ = Describe("Cache", func() {
 		})
 
 		// Pod meta exists - using tenant-aware key format
-		tenantPodKey = utils.GeneratePodKey("default", "p1", constants.DefaultTenantID)
+		tenantPodKey = utils.NewPodKey("default", "p1", constants.DefaultTenantID)
 		metaPod, exist := cache.metaPods.Load(tenantPodKey)
 		Expect(exist).To(BeTrue())
 		Expect(metaPod.Pod).To(Equal(pod))
@@ -198,7 +198,7 @@ var _ = Describe("Cache", func() {
 		Expect(modelName).To(Equal("m1"))
 
 		// Model meta exists - using tenant-aware key format
-		modelKey := utils.GenerateModelKey("m1", constants.DefaultTenantID)
+		modelKey := utils.NewModelKey("m1", constants.DefaultTenantID)
 		metaModel, exist := cache.metaModels.Load(modelKey)
 		Expect(exist).To(BeTrue())
 		Expect(metaModel).ToNot(BeNil())
@@ -219,11 +219,11 @@ var _ = Describe("Cache", func() {
 		// Success
 		cache.addModelAdapter(getNewModelAdapter("m1adapter", "default", "p1")) // Print all keys in metaModels for debugging
 		fmt.Println("Keys in metaModels after adding model adapter:")
-		cache.metaModels.Range(func(key string, model *Model) bool {
-			fmt.Printf("  %s\n", key)
+		cache.metaModels.Range(func(key utils.ModelKey, model *Model) bool {
+			fmt.Printf("  %s\n", key.String())
 
 			// Inspect pods in this model using the Array() method
-			fmt.Printf("  Pods in model %s: %d pods\n", key, model.Pods.Len())
+			fmt.Printf("  Pods in model %s: %d pods\n", key.String(), model.Pods.Len())
 			if podArray := model.Pods.Array(); podArray != nil {
 				for i, pod := range podArray.Pods {
 					fmt.Printf("    Pod %d: %s/%s\n", i, pod.Namespace, pod.Name)
@@ -234,7 +234,7 @@ var _ = Describe("Cache", func() {
 		})
 
 		// Using tenant-aware key format for pod lookups
-		tenantPodKey := utils.GeneratePodKey("default", "p1", constants.DefaultTenantID)
+		tenantPodKey := utils.NewPodKey("default", "p1", constants.DefaultTenantID)
 		metaPod, exist := cache.metaPods.Load(tenantPodKey)
 		Expect(exist).To(BeTrue())
 		Expect(metaPod.Models.Len()).To(Equal(2))
@@ -243,13 +243,13 @@ var _ = Describe("Cache", func() {
 		Expect(exist).To(BeTrue())
 		Expect(modelName).To(Equal("m1adapter"))
 		// Model adapter meta exists - using the tenant-aware format
-		modelKey := utils.GenerateModelKey("m1adapter", constants.DefaultTenantID)
+		modelKey := utils.NewModelKey("m1adapter", constants.DefaultTenantID)
 		metaModel, exist := cache.metaModels.Load(modelKey)
 		Expect(exist).To(BeTrue())
 		Expect(metaModel).ToNot(BeNil())
 		Expect(metaModel.Pods).ToNot(BeNil())
 		// Model adapter -> pod mapping exists
-		podKey := utils.GeneratePodKey("default", "p1", constants.DefaultTenantID)
+		podKey := utils.NewPodKey("default", "p1", constants.DefaultTenantID).String()
 		modelPod, exist := metaModel.Pods.Load(podKey)
 
 		// Add debug output to help diagnose
@@ -274,11 +274,11 @@ var _ = Describe("Cache", func() {
 		// Failure
 		cache.addModelAdapter(getNewModelAdapter("p0", "default", "m0adapter"))
 		// No pod meta automatically created - using tenant-aware key format
-		failureTenantPodKey := utils.GeneratePodKey("default", "p0", constants.DefaultTenantID)
+		failureTenantPodKey := utils.NewPodKey("default", "p0", constants.DefaultTenantID)
 		_, exist = cache.metaPods.Load(failureTenantPodKey)
 		Expect(exist).To(BeFalse())
 		// No model meta created on failure
-		failureModelKey := utils.GenerateModelKey("m0adapter", constants.DefaultTenantID)
+		failureModelKey := utils.NewModelKey("m0adapter", constants.DefaultTenantID)
 		_, exist = cache.metaModels.Load(failureModelKey)
 		Expect(exist).To(BeFalse())
 	})
@@ -290,7 +290,7 @@ var _ = Describe("Cache", func() {
 		cache.addModelAdapter(getNewModelAdapter("m1adapter", "default", oldPod.Name))
 
 		// Check if the pod was actually added to the cache - using tenant-aware key format
-		tenantPodKey := utils.GeneratePodKey(oldPod.Namespace, oldPod.Name, constants.DefaultTenantID)
+		tenantPodKey := utils.NewPodKey(oldPod.Namespace, oldPod.Name, constants.DefaultTenantID)
 		oldMetaPod, ok := cache.metaPods.Load(tenantPodKey)
 		Expect(ok).To(BeTrue(), "Pod should be in the cache")
 
@@ -306,11 +306,11 @@ var _ = Describe("Cache", func() {
 
 		// Print all keys in metaModels before updatePod
 		fmt.Println("Keys in metaModels before updatePod:")
-		cache.metaModels.Range(func(key string, model *Model) bool {
-			fmt.Printf("  %s\n", key)
+		cache.metaModels.Range(func(key utils.ModelKey, model *Model) bool {
+			fmt.Printf("  %s\n", key.String())
 
 			// Inspect pods in this model using the Array() method
-			fmt.Printf("  Pods in model %s: %d pods\n", key, model.Pods.Len())
+			fmt.Printf("  Pods in model %s: %d pods\n", key.String(), model.Pods.Len())
 			if podArray := model.Pods.Array(); podArray != nil {
 				for i, pod := range podArray.Pods {
 					fmt.Printf("    Pod %d: %s/%s\n", i, pod.Namespace, pod.Name)
@@ -324,11 +324,11 @@ var _ = Describe("Cache", func() {
 
 		// Print all keys in metaModels after updatePod
 		fmt.Println("Keys in metaModels after updatePod:")
-		cache.metaModels.Range(func(key string, model *Model) bool {
-			fmt.Printf("  %s\n", key)
+		cache.metaModels.Range(func(key utils.ModelKey, model *Model) bool {
+			fmt.Printf("  %s\n", key.String())
 
 			// Inspect pods in this model using the Array() method
-			fmt.Printf("  Pods in model %s: %d pods\n", key, model.Pods.Len())
+			fmt.Printf("  Pods in model %s: %d pods\n", key.String(), model.Pods.Len())
 			if podArray := model.Pods.Array(); podArray != nil {
 				for i, pod := range podArray.Pods {
 					fmt.Printf("    Pod %d: %s/%s\n", i, pod.Namespace, pod.Name)
@@ -339,12 +339,12 @@ var _ = Describe("Cache", func() {
 		})
 
 		// OldPod meta deleted - using tenant-aware key format
-		oldTenantPodKey := utils.GeneratePodKey("default", "p1", constants.DefaultTenantID)
+		oldTenantPodKey := utils.NewPodKey("default", "p1", constants.DefaultTenantID)
 		_, exist := cache.metaPods.Load(oldTenantPodKey)
 		Expect(exist).To(BeFalse())
 
 		// NewPod meta created - using tenant-aware key format
-		newTenantPodKey := utils.GeneratePodKey("default", "p2", constants.DefaultTenantID)
+		newTenantPodKey := utils.NewPodKey("default", "p2", constants.DefaultTenantID)
 		newMetaPod, exist := cache.metaPods.Load(newTenantPodKey)
 		Expect(exist).To(BeTrue())
 		Expect(newMetaPod.Pod).To(Equal(newPod))
@@ -362,7 +362,7 @@ var _ = Describe("Cache", func() {
 		Expect(newMetaPod.Metrics.Len()).To(Equal(0))
 
 		// Model meta exists - using tenant-aware model key
-		modelKey := utils.GenerateModelKey("m1", constants.DefaultTenantID)
+		modelKey := utils.NewModelKey("m1", constants.DefaultTenantID)
 		metaModel, exist := cache.metaModels.Load(modelKey)
 		Expect(exist).To(BeTrue())
 		Expect(metaModel).ToNot(BeNil())
@@ -370,13 +370,13 @@ var _ = Describe("Cache", func() {
 		Expect(metaModel.Pods.Len()).To(Equal(1))
 
 		// Model -> pod mapping exists - using tenant-aware pod key
-		podKey := utils.GeneratePodKey("default", "p2", constants.DefaultTenantID)
+		podKey := utils.NewPodKey("default", "p2", constants.DefaultTenantID).String()
 		modelPod, exist := metaModel.Pods.Load(podKey)
 		Expect(exist).To(BeTrue())
 		Expect(modelPod).To(Equal(newPod))
 
 		// Model adapter meta should be cleared - using tenant-aware key
-		adapterKey := utils.GenerateModelKey("m1adapter", constants.DefaultTenantID)
+		adapterKey := utils.NewModelKey("m1adapter", constants.DefaultTenantID)
 		_, exist = cache.metaModels.Load(adapterKey)
 		Expect(exist).To(BeFalse()) // The adapter should be removed when pod is updated
 	})
@@ -387,7 +387,7 @@ var _ = Describe("Cache", func() {
 		oldPod := getNewPod("p1", "default", "m1", 0)
 		cache.addPod(oldPod)
 		// Use tenant-aware model key format
-		modelKey := utils.GenerateModelKey("m1", constants.DefaultTenantID)
+		modelKey := utils.NewModelKey("m1", constants.DefaultTenantID)
 		metaModel, exist := cache.metaModels.Load(modelKey)
 		Expect(exist).To(BeTrue())
 		pods := metaModel.Pods.Array()
@@ -414,17 +414,17 @@ var _ = Describe("Cache", func() {
 		cache.deletePod(pod)
 
 		// Pod meta deleted - using tenant-aware key format
-		tenantPodKey := utils.GeneratePodKey("default", "p1", constants.DefaultTenantID)
+		tenantPodKey := utils.NewPodKey("default", "p1", constants.DefaultTenantID)
 		_, exist := cache.metaPods.Load(tenantPodKey)
 		Expect(exist).To(BeFalse())
 
 		// Related model meta deleted - using tenant-aware model key
-		modelKey := utils.GenerateModelKey("m1", constants.DefaultTenantID)
+		modelKey := utils.NewModelKey("m1", constants.DefaultTenantID)
 		_, exist = cache.metaModels.Load(modelKey)
 		Expect(exist).To(BeFalse())
 
 		// Related model adapter meta deleted - using tenant-aware model key
-		adapterKey := utils.GenerateModelKey("m0adapter", constants.DefaultTenantID)
+		adapterKey := utils.NewModelKey("m0adapter", constants.DefaultTenantID)
 		_, exist = cache.metaModels.Load(adapterKey)
 		Expect(exist).To(BeFalse())
 
@@ -432,7 +432,7 @@ var _ = Describe("Cache", func() {
 		cache.addPod(pod)
 
 		// Using tenant-aware key format
-		tenantPodKey = utils.GeneratePodKey("default", "p1", constants.DefaultTenantID)
+		tenantPodKey = utils.NewPodKey("default", "p1", constants.DefaultTenantID)
 		_, exist = cache.metaPods.Load(tenantPodKey)
 		Expect(exist).To(BeTrue())
 
@@ -452,15 +452,15 @@ var _ = Describe("Cache", func() {
 
 		// Debug print all model keys before deletion
 		fmt.Println("\nDEBUG - Model keys BEFORE deletion:")
-		cache.metaModels.Range(func(key string, model *Model) bool {
-			fmt.Printf("  Model key: %s (pods: %d)\n", key, model.Pods.Len())
+		cache.metaModels.Range(func(key utils.ModelKey, model *Model) bool {
+			fmt.Printf("  Model key: %s (pods: %d)\n", key.String(), model.Pods.Len())
 			return true
 		})
 
 		// Debug print all pod model mappings before deletion
 		fmt.Println("\nDEBUG - Pod model mappings BEFORE deletion:")
-		cache.metaPods.Range(func(key string, pod *Pod) bool {
-			fmt.Printf("  Pod key: %s (models: %d)\n", key, pod.Models.Len())
+		cache.metaPods.Range(func(key utils.PodKey, pod *Pod) bool {
+			fmt.Printf("  Pod key: %s (models: %d)\n", key.String(), pod.Models.Len())
 
 			// Print the actual model names in the pod's Models map
 			if pod.Models.Len() > 0 {
@@ -478,15 +478,15 @@ var _ = Describe("Cache", func() {
 
 		// Debug print all model keys after deletion
 		fmt.Println("\nDEBUG - Model keys AFTER deletion:")
-		cache.metaModels.Range(func(key string, model *Model) bool {
-			fmt.Printf("  Model key: %s (pods: %d)\n", key, model.Pods.Len())
+		cache.metaModels.Range(func(key utils.ModelKey, model *Model) bool {
+			fmt.Printf("  Model key: %s (pods: %d)\n", key.String(), model.Pods.Len())
 			return true
 		})
 
 		// Debug print all pod model mappings after deletion
 		fmt.Println("\nDEBUG - Pod model mappings AFTER deletion:")
-		cache.metaPods.Range(func(key string, pod *Pod) bool {
-			fmt.Printf("  Pod key: %s (models: %d)\n", key, pod.Models.Len())
+		cache.metaPods.Range(func(key utils.PodKey, pod *Pod) bool {
+			fmt.Printf("  Pod key: %s (models: %d)\n", key.String(), pod.Models.Len())
 
 			// Print the actual model names in the pod's Models map
 			if pod.Models.Len() > 0 {
@@ -497,7 +497,7 @@ var _ = Describe("Cache", func() {
 		})
 
 		// Pod1 - using tenant-aware key format
-		tenantP1Key := utils.GeneratePodKey("default", "p1", constants.DefaultTenantID)
+		tenantP1Key := utils.NewPodKey("default", "p1", constants.DefaultTenantID)
 		p1MetaPod, exist := cache.metaPods.Load(tenantP1Key)
 		Expect(exist).To(BeTrue())
 		Expect(p1MetaPod.Models.Len()).To(Equal(1))
@@ -505,7 +505,7 @@ var _ = Describe("Cache", func() {
 		Expect(exist).To(BeFalse(), "m1adapter1 should be removed from p1's models")
 
 		// Pod2 - using tenant-aware key format
-		tenantP2Key := utils.GeneratePodKey("default", "p2", constants.DefaultTenantID)
+		tenantP2Key := utils.NewPodKey("default", "p2", constants.DefaultTenantID)
 		p2MetaPod, exist := cache.metaPods.Load(tenantP2Key)
 		Expect(exist).To(BeTrue())
 		Expect(p2MetaPod.Models.Len()).To(Equal(1)) // Include base model
@@ -514,12 +514,12 @@ var _ = Describe("Cache", func() {
 
 		// Now check that the model adapter entries are properly cleaned up
 		// Check using tenant-aware model key format
-		adapterTenantKey := utils.GenerateModelKey("m1adapter1", constants.DefaultTenantID)
+		adapterTenantKey := utils.NewModelKey("m1adapter1", constants.DefaultTenantID)
 		_, existTenant := cache.metaModels.Load(adapterTenantKey)
 
 		Expect(existTenant).To(BeFalse(),
 			"Model adapter should be removed from cache (key format: tenant=%s)",
-			adapterTenantKey)
+			adapterTenantKey.String())
 	})
 
 	It("should updateModelAdapter reset mappings", func() {
@@ -533,8 +533,8 @@ var _ = Describe("Cache", func() {
 		// Debug: Print cache state before update
 		fmt.Println("\nDEBUG - Before updateModelAdapter:")
 		fmt.Println("Model keys:")
-		cache.metaModels.Range(func(key string, model *Model) bool {
-			fmt.Printf("  Model key: %s (pods: %d)\n", key, model.Pods.Len())
+		cache.metaModels.Range(func(key utils.ModelKey, model *Model) bool {
+			fmt.Printf("  Model key: %s (pods: %d)\n", key.String(), model.Pods.Len())
 			if model.Pods.Len() > 0 {
 				fmt.Println("  Pods in this model:")
 				if podArray := model.Pods.Array(); podArray != nil {
@@ -547,7 +547,7 @@ var _ = Describe("Cache", func() {
 		})
 
 		fmt.Println("Pod keys and their models:")
-		cache.metaPods.Range(func(key string, pod *Pod) bool {
+		cache.metaPods.Range(func(key utils.PodKey, pod *Pod) bool {
 			fmt.Printf("  Pod key: %s (models: %d)\n", key, pod.Models.Len())
 			if pod.Models.Len() > 0 {
 				modelArray := pod.Models.Array()
@@ -563,8 +563,8 @@ var _ = Describe("Cache", func() {
 		// Debug: Print cache state after update
 		fmt.Println("\nDEBUG - After updateModelAdapter:")
 		fmt.Println("Model keys:")
-		cache.metaModels.Range(func(key string, model *Model) bool {
-			fmt.Printf("  Model key: %s (pods: %d)\n", key, model.Pods.Len())
+		cache.metaModels.Range(func(key utils.ModelKey, model *Model) bool {
+			fmt.Printf("  Model key: %s (pods: %d)\n", key.String(), model.Pods.Len())
 			if model.Pods.Len() > 0 {
 				fmt.Println("  Pods in this model:")
 				if podArray := model.Pods.Array(); podArray != nil {
@@ -577,8 +577,8 @@ var _ = Describe("Cache", func() {
 		})
 
 		fmt.Println("Pod keys and their models:")
-		cache.metaPods.Range(func(key string, pod *Pod) bool {
-			fmt.Printf("  Pod key: %s (models: %d)\n", key, pod.Models.Len())
+		cache.metaPods.Range(func(key utils.PodKey, pod *Pod) bool {
+			fmt.Printf("  Pod key: %s (models: %d)\n", key.String(), pod.Models.Len())
 			if pod.Models.Len() > 0 {
 				modelArray := pod.Models.Array()
 				fmt.Printf("    Model names: %v\n", modelArray)
@@ -587,7 +587,7 @@ var _ = Describe("Cache", func() {
 		})
 
 		// Pod1 - using tenant-aware key format
-		tenantP1Key := utils.GeneratePodKey("default", "p1", constants.DefaultTenantID)
+		tenantP1Key := utils.NewPodKey("default", "p1", constants.DefaultTenantID)
 		p1MetaPod, exist := cache.metaPods.Load(tenantP1Key)
 		Expect(exist).To(BeTrue())
 		Expect(p1MetaPod.Models.Len()).To(Equal(1))
@@ -597,7 +597,7 @@ var _ = Describe("Cache", func() {
 		Expect(exist).To(BeFalse())
 
 		// Pod2 - using tenant-aware key format
-		tenantP2Key := utils.GeneratePodKey("default", "p2", constants.DefaultTenantID)
+		tenantP2Key := utils.NewPodKey("default", "p2", constants.DefaultTenantID)
 		p2MetaPod, exist := cache.metaPods.Load(tenantP2Key)
 		Expect(exist).To(BeTrue())
 		Expect(p2MetaPod.Models.Len()).To(Equal(2)) // Include base model
@@ -607,7 +607,7 @@ var _ = Describe("Cache", func() {
 		Expect(exist).To(BeTrue())
 
 		// Pod3 - using tenant-aware key format
-		tenantP3Key := utils.GeneratePodKey("default", "p3", constants.DefaultTenantID)
+		tenantP3Key := utils.NewPodKey("default", "p3", constants.DefaultTenantID)
 		p3MetaPod, exist := cache.metaPods.Load(tenantP3Key)
 		Expect(exist).To(BeTrue())
 		Expect(p3MetaPod.Models.Len()).To(Equal(2)) // Include base model
@@ -617,12 +617,12 @@ var _ = Describe("Cache", func() {
 		Expect(exist).To(BeTrue())
 
 		// Model adpater1 cleared - using tenant-aware model key
-		adapter1Key := utils.GenerateModelKey("m1adapter1", "default")
+		adapter1Key := utils.NewModelKey("m1adapter1", "default")
 		_, exist = cache.metaModels.Load(adapter1Key)
 		Expect(exist).To(BeFalse())
 
 		// Model adpater2 registered - using tenant-aware model key
-		adapter2Key := utils.GenerateModelKey("m1adapter2", "default")
+		adapter2Key := utils.NewModelKey("m1adapter2", "default")
 		metaModel, exist := cache.metaModels.Load(adapter2Key)
 		Expect(exist).To(BeTrue())
 		Expect(metaModel).ToNot(BeNil())
@@ -630,15 +630,15 @@ var _ = Describe("Cache", func() {
 		Expect(metaModel.Pods.Len()).To(Equal(2))
 
 		// Check model -> pod mappings using tenant-aware pod keys
-		tenantP1Key = utils.GeneratePodKey("default", "p1", constants.DefaultTenantID)
-		tenantP2Key = utils.GeneratePodKey("default", "p2", constants.DefaultTenantID)
-		tenantP3Key = utils.GeneratePodKey("default", "p3", constants.DefaultTenantID)
+		tenantP1Key = utils.NewPodKey("default", "p1", constants.DefaultTenantID)
+		tenantP2Key = utils.NewPodKey("default", "p2", constants.DefaultTenantID)
+		tenantP3Key = utils.NewPodKey("default", "p3", constants.DefaultTenantID)
 
-		_, exist = metaModel.Pods.Load(tenantP1Key)
+		_, exist = metaModel.Pods.Load(tenantP1Key.String())
 		Expect(exist).To(BeFalse())
-		_, exist = metaModel.Pods.Load(tenantP2Key)
+		_, exist = metaModel.Pods.Load(tenantP2Key.String())
 		Expect(exist).To(BeTrue())
-		_, exist = metaModel.Pods.Load(tenantP3Key)
+		_, exist = metaModel.Pods.Load(tenantP3Key.String())
 		Expect(exist).To(BeTrue())
 	})
 
@@ -652,7 +652,7 @@ var _ = Describe("Cache", func() {
 		Expect(err).ToNot(BeNil())
 
 		// Use tenant-aware key to verify pod is stored with tenant-aware key
-		tenantPodKey := utils.GeneratePodKey(pod.Namespace, pod.Name, constants.DefaultTenantID)
+		tenantPodKey := utils.NewPodKey(pod.Namespace, pod.Name, constants.DefaultTenantID)
 		metaPod, exist := cache.metaPods.Load(tenantPodKey)
 		Expect(exist).To(BeTrue())
 		Expect(metaPod.Pod).To(Equal(pod))
@@ -689,15 +689,15 @@ var _ = Describe("Cache", func() {
 		Expect(err).ToNot(BeNil())
 
 		// For models, we need to use tenant-aware keys for both the test and in the implementation
-		modelKey := utils.GenerateModelKey("m1", "default")
+		modelKey := utils.NewModelKey("m1", "default")
 
 		// Verify that model exists with tenant-aware key
 		metaModel, exists := cache.metaModels.Load(modelKey)
 		Expect(exists).To(BeTrue())
 
 		// Check that pods are correctly mapped in the model
-		tenantPodKey := utils.GeneratePodKey(constants.DefaultTenantID, "p1", constants.DefaultTenantID)
-		_, exists = metaModel.Pods.Load(tenantPodKey)
+		tenantPodKey := utils.NewPodKey(constants.DefaultTenantID, "p1", constants.DefaultTenantID)
+		_, exists = metaModel.Pods.Load(tenantPodKey.String())
 		Expect(exists).To(BeTrue())
 
 		// Now the lookup should work
@@ -716,8 +716,8 @@ var _ = Describe("Cache", func() {
 		cache.addPod(pod2)
 
 		// Verify that models exist with tenant-aware keys
-		modelKey1 := utils.GenerateModelKey("m1", "default")
-		modelKey2 := utils.GenerateModelKey("m2", "default")
+		modelKey1 := utils.NewModelKey("m1", "default")
+		modelKey2 := utils.NewModelKey("m2", "default")
 
 		_, exist := cache.metaModels.Load(modelKey1)
 		Expect(exist).To(BeTrue())
@@ -752,7 +752,7 @@ var _ = Describe("Cache", func() {
 
 		// For an existing pod, we should be able to look it up directly with tenant-aware key
 		key := utils.NewPodKey(pod1.Namespace, pod1.Name, constants.DefaultTenantID)
-		tenantPodKey := utils.GeneratePodKey(pod1.Namespace, pod1.Name, constants.DefaultTenantID)
+		tenantPodKey := utils.NewPodKey(pod1.Namespace, pod1.Name, constants.DefaultTenantID)
 		_, exist := cache.metaPods.Load(tenantPodKey)
 		Expect(exist).To(BeTrue())
 
@@ -770,12 +770,12 @@ var _ = Describe("Cache", func() {
 		cache.AddPod(getReadyPod("p1", "default", modelName, 0))
 
 		// Verify model exists with tenant-aware key
-		modelKeyStr := utils.GenerateModelKey(modelName, tenantID)
-		_, exist := cache.metaModels.Load(modelKeyStr)
+		modelKey := utils.NewModelKey(modelName, tenantID)
+		modelKeyStr := modelKey.String()
+		_, exist := cache.metaModels.Load(modelKey)
 		Expect(exist).To(BeTrue())
 
 		// Add request count
-		modelKey := utils.NewModelKey(modelName, tenantID)
 		term := cache.AddRequestCountByModelKey(nil, "no use now", modelKey)
 		Expect(cache.numRequestsTraces).To(Equal(int32(1)))
 
@@ -786,7 +786,7 @@ var _ = Describe("Cache", func() {
 		Expect(trace.numRequests).To(Equal(int32(1)))
 		Expect(trace.completedRequests).To(Equal(int32(0)))
 
-		meta, exist := cache.metaModels.Load(modelKeyStr)
+		meta, exist := cache.metaModels.Load(modelKey)
 		Expect(exist).To(BeTrue())
 		Expect(meta.pendingRequests).To(Equal(int32(1)))
 
@@ -797,7 +797,7 @@ var _ = Describe("Cache", func() {
 		Expect(trace).ToNot(BeNil())
 		Expect(trace.numRequests).To(Equal(int32(1)))
 		Expect(trace.completedRequests).To(Equal(int32(1)))
-		meta, exist = cache.metaModels.Load(modelKeyStr)
+		meta, exist = cache.metaModels.Load(modelKey)
 		Expect(exist).To(BeTrue())
 		Expect(meta.pendingRequests).To(Equal(int32(0)))
 
@@ -816,7 +816,7 @@ var _ = Describe("Cache", func() {
 		cache.AddPod(getReadyPod("p1", "default", modelName, 0))
 
 		// Verify model exists with tenant-aware key
-		modelKeyStr := utils.GenerateModelKey(modelName, tenantID)
+		modelKeyStr := utils.NewModelKey(modelName, tenantID)
 		_, exist := cache.metaModels.Load(modelKeyStr)
 		Expect(exist).To(BeTrue())
 

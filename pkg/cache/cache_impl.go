@@ -53,8 +53,8 @@ import (
 //	*v1.Pod: The found Pod object
 //	error: Error if pod doesn't exist
 func (c *Store) GetPodByKey(key utils.PodKey) (*v1.Pod, error) {
-	// Only look for tenant-aware key format
-	metaPod, ok := c.metaPods.Load(key.String())
+	// Use the PodKey directly as map key
+	metaPod, ok := c.metaPods.Load(key)
 	if !ok {
 		return nil, fmt.Errorf("key does not exist in the cache: %s", key.String())
 	}
@@ -71,7 +71,7 @@ func (c *Store) ListPods() []*v1.Pod {
 	// Use a map to deduplicate pods (since they might be stored with multiple keys)
 	uniquePods := make(map[string]*v1.Pod)
 
-	c.metaPods.Range(func(_ string, metaPod *Pod) bool {
+	c.metaPods.Range(func(_ utils.PodKey, metaPod *Pod) bool {
 		// Use pod namespace/name as a unique identifier
 		key := fmt.Sprintf("%s/%s", metaPod.Pod.Namespace, metaPod.Pod.Name)
 		uniquePods[key] = metaPod.Pod
@@ -96,9 +96,8 @@ func (c *Store) ListPods() []*v1.Pod {
 //	types.PodList: List of Pod objects
 //	error: Error if model doesn't exist
 func (c *Store) ListPodsByModelKey(modelKey utils.ModelKey) (types.PodList, error) {
-	// Only use the tenant-aware model key format
-	modelKeyStr := modelKey.String()
-	meta, ok := c.metaModels.Load(modelKeyStr)
+	// Use the ModelKey directly as map key
+	meta, ok := c.metaModels.Load(modelKey)
 	if !ok {
 		return nil, fmt.Errorf("model does not exist in the cache: %s (tenant: %s)", modelKey.Name, modelKey.TenantID)
 	}
@@ -120,17 +119,14 @@ func (c *Store) ListModels(tenantID string) []string {
 	}
 
 	// Get all model keys
-	allKeys := c.metaModels.Keys()
-
-	// Filter keys by tenant
 	modelNames := make([]string, 0)
 
-	for _, keyString := range allKeys {
-		modelKey, success := utils.ParseModelKeyString(keyString)
-		if success && modelKey.TenantID == tenantID {
+	c.metaModels.Range(func(modelKey utils.ModelKey, _ *Model) bool {
+		if modelKey.TenantID == tenantID {
 			modelNames = append(modelNames, modelKey.Name)
 		}
-	}
+		return true
+	})
 
 	return modelNames
 }
@@ -144,7 +140,7 @@ func (c *Store) ListModels(tenantID string) []string {
 //
 //	bool: True if model exists
 func (c *Store) HasModelKey(modelKey utils.ModelKey) bool {
-	_, ok := c.metaModels.Load(modelKey.String())
+	_, ok := c.metaModels.Load(modelKey)
 	return ok
 }
 
@@ -159,7 +155,7 @@ func (c *Store) HasModelKey(modelKey utils.ModelKey) bool {
 //	metrics.MetricValue: The metric value
 //	error: Error if Pod or metric doesn't exist
 func (c *Store) GetMetricValueByPodKey(podKey utils.PodKey, metricName string) (metrics.MetricValue, error) {
-	metaPod, ok := c.metaPods.Load(podKey.String())
+	metaPod, ok := c.metaPods.Load(podKey)
 	if !ok {
 		return nil, fmt.Errorf("key does not exist in the cache: %s", podKey.String())
 	}
@@ -179,7 +175,7 @@ func (c *Store) GetMetricValueByPodKey(podKey utils.PodKey, metricName string) (
 //	metrics.MetricValue: The metric value
 //	error: Error if Pod, model or metric doesn't exist
 func (c *Store) GetMetricValueByPodModelKey(podKey utils.PodKey, modelKey utils.ModelKey, metricName string) (metrics.MetricValue, error) {
-	metaPod, ok := c.metaPods.Load(podKey.String())
+	metaPod, ok := c.metaPods.Load(podKey)
 	if !ok {
 		return nil, fmt.Errorf("key does not exist in the cache: %s", podKey.String())
 	}
@@ -210,7 +206,7 @@ func (c *Store) AddRequestCountByModelKey(ctx *types.RoutingContext, requestID s
 		}
 	}
 
-	meta, ok := c.metaModels.Load(modelKey.String())
+	meta, ok := c.metaModels.Load(modelKey)
 	if ok {
 		atomic.AddInt32(&meta.pendingRequests, 1)
 	}
@@ -233,7 +229,7 @@ func (c *Store) DoneRequestCountByModelKey(ctx *types.RoutingContext, requestID 
 		c.donePodStats(ctx, requestID)
 	}
 
-	meta, ok := c.metaModels.Load(modelKey.String())
+	meta, ok := c.metaModels.Load(modelKey)
 	if ok {
 		atomic.AddInt32(&meta.pendingRequests, -1)
 	}
@@ -258,7 +254,7 @@ func (c *Store) DoneRequestTraceByModelKey(ctx *types.RoutingContext, requestID 
 		c.donePodStats(ctx, requestID)
 	}
 
-	meta, ok := c.metaModels.Load(modelKey.String())
+	meta, ok := c.metaModels.Load(modelKey)
 	if ok {
 		atomic.AddInt32(&meta.pendingRequests, -1)
 	}
@@ -295,8 +291,8 @@ func (c *Store) AddSubscriber(subscriber metrics.MetricSubscriber) {
 //	[]string: Slice of model names
 //	error: Error if Pod doesn't exist
 func (c *Store) ListModelsByPodKey(podKey utils.PodKey) ([]string, error) {
-	// Only look for tenant-aware key format
-	metaPod, ok := c.metaPods.Load(podKey.String())
+	// Use the PodKey directly as map key
+	metaPod, ok := c.metaPods.Load(podKey)
 	if !ok {
 		return nil, fmt.Errorf("key does not exist in the cache: %s", podKey.String())
 	}
